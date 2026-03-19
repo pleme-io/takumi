@@ -443,4 +443,120 @@ paths: {}
         assert!(resolved.operations.is_empty());
         assert!(resolved.schemas.is_empty());
     }
+
+    // ── Resolve edge cases ──────────────────────────────────────
+
+    #[test]
+    fn resolve_spec_with_schema_ref_parameter() {
+        let yaml = r##"
+info:
+  title: SchemaRef Test
+  version: "1.0"
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - name: filter
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Filter"
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    Filter:
+      type: object
+      properties:
+        name:
+          type: string
+"##;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec).unwrap();
+        let list_op = &resolved.operations[0];
+        assert_eq!(list_op.parameters.len(), 1);
+        assert_eq!(list_op.parameters[0].name, "filter");
+        assert_eq!(
+            list_op.parameters[0].field_type,
+            FieldType::Object("Filter".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_spec_with_ref_request_body() {
+        let yaml = r##"
+info:
+  title: RefBody Test
+  version: "1.0"
+paths:
+  /items:
+    post:
+      operationId: createItem
+      requestBody:
+        $ref: "#/components/requestBodies/ItemBody"
+      responses:
+        "201":
+          description: Created
+components:
+  requestBodies:
+    ItemBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+"##;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec).unwrap();
+        let create_op = &resolved.operations[0];
+        assert!(create_op.request_body.is_some());
+        assert!(create_op.request_body.as_ref().unwrap().required);
+    }
+
+    #[test]
+    fn resolve_spec_with_multiple_tags() {
+        let yaml = r#"
+info:
+  title: Multi-tag Test
+  version: "1.0"
+paths:
+  /items:
+    get:
+      operationId: listItems
+      tags:
+        - items
+        - public
+      responses:
+        "200":
+          description: OK
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec).unwrap();
+        let list_op = &resolved.operations[0];
+        assert_eq!(list_op.tags, vec!["items", "public"]);
+    }
+
+    #[test]
+    fn resolve_spec_with_no_operation_id() {
+        let yaml = r#"
+info:
+  title: No OpId Test
+  version: "1.0"
+paths:
+  /items:
+    get:
+      responses:
+        "200":
+          description: OK
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec).unwrap();
+        assert_eq!(resolved.operations.len(), 1);
+        assert!(resolved.operations[0].id.is_none());
+    }
 }

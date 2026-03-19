@@ -11,6 +11,24 @@ pub struct CrudGroup {
     pub list: Option<ResolvedOp>,
 }
 
+/// Trait for customizing CRUD grouping logic.
+///
+/// Default implementation groups by HTTP method + path patterns.
+/// Consumers can override for custom resource grouping strategies.
+pub trait CrudGrouper: Send + Sync {
+    /// Group operations into CRUD sets.
+    fn group(&self, ops: &[ResolvedOp]) -> Vec<CrudGroup>;
+}
+
+/// Default grouper based on HTTP method + path patterns.
+pub struct PathBasedGrouper;
+
+impl CrudGrouper for PathBasedGrouper {
+    fn group(&self, ops: &[ResolvedOp]) -> Vec<CrudGroup> {
+        group_crud(ops)
+    }
+}
+
 /// Group resolved operations into CRUD sets based on HTTP method + path patterns.
 ///
 /// Groups operations by path prefix (e.g. `/pets` and `/pets/{id}` share a group).
@@ -148,5 +166,61 @@ mod tests {
         let ops = vec![make_op("patch", "/pets/{petId}", "patchPet")];
         let groups = group_crud(&ops);
         assert!(groups[0].update.is_some());
+    }
+
+    // ── CrudGrouper trait ────────────────────────────────────────
+
+    #[test]
+    fn path_based_grouper_delegates_to_group_crud() {
+        let grouper = PathBasedGrouper;
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/pets/{petId}", "getPet"),
+        ];
+        let groups = grouper.group(&ops);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].list.is_some());
+        assert!(groups[0].create.is_some());
+        assert!(groups[0].read.is_some());
+    }
+
+    // ── CRUD edge cases ─────────────────────────────────────────
+
+    #[test]
+    fn crud_nested_path() {
+        let ops = vec![
+            make_op("get", "/users/{userId}/posts", "listUserPosts"),
+            make_op("post", "/users/{userId}/posts", "createUserPost"),
+        ];
+        let groups = group_crud(&ops);
+        assert!(!groups.is_empty());
+        // Nested resources group under the base path before the first param
+        let user_group = groups.iter().find(|g| g.name == "users");
+        assert!(user_group.is_some());
+    }
+
+    #[test]
+    fn crud_api_versioned_path() {
+        let ops = vec![
+            make_op("get", "/api/v1/items", "listItems"),
+            make_op("get", "/api/v1/items/{id}", "getItem"),
+            make_op("delete", "/api/v1/items/{id}", "deleteItem"),
+        ];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name, "items");
+        assert!(groups[0].list.is_some());
+        assert!(groups[0].read.is_some());
+        assert!(groups[0].delete.is_some());
+    }
+
+    #[test]
+    fn crud_single_operation() {
+        let ops = vec![make_op("get", "/health", "healthCheck")];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name, "health");
+        assert!(groups[0].list.is_some()); // GET on collection path
     }
 }
