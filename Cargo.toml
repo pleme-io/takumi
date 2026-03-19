@@ -1,0 +1,32 @@
+[package]
+name = "takumi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89.0"
+description = "Takumi (匠) — OpenAPI to typed IR resolution pipeline"
+homepage = "https://github.com/pleme-io/takumi"
+repository = "https://github.com/pleme-io/takumi"
+license = "MIT"
+categories = ["parsing", "web-programming"]
+keywords = ["openapi", "codegen", "ir", "resolution", "api"]
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[dependencies]
+sekkei = { git = "https://github.com/pleme-io/sekkei" }
+indexmap = { version = "2", features = ["serde"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+serde_yaml_ng = "0.10"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
