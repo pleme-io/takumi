@@ -118,6 +118,16 @@ impl FieldType {
             _ => None,
         }
     }
+
+    /// Returns the nesting depth of the type (0 for scalars, 1+ for containers).
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        match self {
+            Self::Array(inner) | Self::Map(inner) => 1 + inner.depth(),
+            Self::Enum { underlying, .. } => underlying.depth(),
+            _ => 0,
+        }
+    }
 }
 
 /// Trait for customizing how `OpenAPI` schemas map to field types.
@@ -987,6 +997,36 @@ mod tests {
             Some("User")
         );
         assert_eq!(FieldType::String.object_name(), None);
+    }
+
+    // ── depth ────────────────────────────────────────────────────
+
+    #[test]
+    fn field_type_depth_scalar() {
+        assert_eq!(FieldType::String.depth(), 0);
+        assert_eq!(FieldType::Integer.depth(), 0);
+        assert_eq!(FieldType::Any.depth(), 0);
+        assert_eq!(FieldType::Object("X".to_string()).depth(), 0);
+    }
+
+    #[test]
+    fn field_type_depth_array() {
+        assert_eq!(FieldType::Array(Box::new(FieldType::String)).depth(), 1);
+    }
+
+    #[test]
+    fn field_type_depth_nested() {
+        let nested = FieldType::Array(Box::new(FieldType::Map(Box::new(FieldType::Integer))));
+        assert_eq!(nested.depth(), 2);
+    }
+
+    #[test]
+    fn field_type_depth_enum() {
+        let e = FieldType::Enum {
+            values: vec!["a".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        assert_eq!(e.depth(), 0);
     }
 
     // ── Hash ────────────────────────────────────────────────────
