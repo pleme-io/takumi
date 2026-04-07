@@ -223,4 +223,136 @@ mod tests {
         assert_eq!(groups[0].name, "health");
         assert!(groups[0].list.is_some()); // GET on collection path
     }
+
+    #[test]
+    fn unknown_method_ignored() {
+        let ops = vec![make_op("options", "/pets", "optionsPets")];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 1);
+        let g = &groups[0];
+        assert!(g.list.is_none());
+        assert!(g.create.is_none());
+        assert!(g.read.is_none());
+        assert!(g.update.is_none());
+        assert!(g.delete.is_none());
+    }
+
+    #[test]
+    fn head_method_ignored() {
+        let ops = vec![make_op("head", "/pets", "headPets")];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].list.is_none());
+    }
+
+    #[test]
+    fn put_on_collection_is_create() {
+        let ops = vec![make_op("put", "/pets", "replacePets")];
+        let groups = group_crud(&ops);
+        assert!(groups[0].update.is_some());
+    }
+
+    #[test]
+    fn delete_on_collection() {
+        let ops = vec![make_op("delete", "/pets", "deleteAllPets")];
+        let groups = group_crud(&ops);
+        assert!(groups[0].delete.is_some());
+    }
+
+    #[test]
+    fn post_on_resource_path() {
+        let ops = vec![make_op("post", "/pets/{petId}", "doSomething")];
+        let groups = group_crud(&ops);
+        assert!(groups[0].create.is_some());
+    }
+
+    #[test]
+    fn last_operation_wins_for_same_slot() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets1"),
+            make_op("get", "/pets", "listPets2"),
+        ];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(
+            groups[0].list.as_ref().unwrap().id.as_deref(),
+            Some("listPets2")
+        );
+    }
+
+    #[test]
+    fn group_preserves_operation_data() {
+        let mut op = make_op("get", "/pets", "listPets");
+        op.summary = Some("List all pets".to_string());
+        op.tags = vec!["pets".to_string()];
+        let groups = group_crud(&[op]);
+        let list = groups[0].list.as_ref().unwrap();
+        assert_eq!(list.summary.as_deref(), Some("List all pets"));
+        assert_eq!(list.tags, vec!["pets"]);
+    }
+
+    #[test]
+    fn extract_base_path_root_only() {
+        assert_eq!(extract_base_path("/"), "/");
+    }
+
+    #[test]
+    fn extract_base_path_param_at_start() {
+        assert_eq!(extract_base_path("/{id}"), "/");
+    }
+
+    #[test]
+    fn extract_base_path_deeply_nested() {
+        assert_eq!(
+            extract_base_path("/api/v1/users/{userId}/posts/{postId}/comments"),
+            "/api/v1/users"
+        );
+    }
+
+    #[test]
+    fn path_to_resource_name_empty() {
+        assert_eq!(path_to_resource_name(""), "root");
+    }
+
+    #[test]
+    fn path_to_resource_name_single_segment() {
+        assert_eq!(path_to_resource_name("items"), "items");
+    }
+
+    #[test]
+    fn multiple_resource_groups_independent() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/users", "listUsers"),
+            make_op("post", "/users", "createUser"),
+            make_op("get", "/orders", "listOrders"),
+        ];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 3);
+        let pets = groups.iter().find(|g| g.name == "pets").unwrap();
+        assert!(pets.list.is_some());
+        assert!(pets.create.is_some());
+        let users = groups.iter().find(|g| g.name == "users").unwrap();
+        assert!(users.list.is_some());
+        assert!(users.create.is_some());
+        let orders = groups.iter().find(|g| g.name == "orders").unwrap();
+        assert!(orders.list.is_some());
+        assert!(orders.create.is_none());
+    }
+
+    #[test]
+    fn crud_group_name_field() {
+        let ops = vec![make_op("get", "/api/v2/widgets", "listWidgets")];
+        let groups = group_crud(&ops);
+        assert_eq!(groups[0].name, "widgets");
+    }
+
+    #[test]
+    fn crud_grouper_trait_object() {
+        let grouper: Box<dyn CrudGrouper> = Box::new(PathBasedGrouper);
+        let ops = vec![make_op("get", "/pets", "listPets")];
+        let groups = grouper.group(&ops);
+        assert_eq!(groups.len(), 1);
+    }
 }
