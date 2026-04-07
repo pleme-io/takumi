@@ -1,7 +1,7 @@
 use crate::resolve::ResolvedOp;
 
 /// A group of operations that form a CRUD set for a resource.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrudGroup {
     pub name: String,
     pub create: Option<ResolvedOp>,
