@@ -105,12 +105,14 @@ impl FieldType {
 /// Consumers can override for platform-specific type handling.
 pub trait TypeMapper: Send + Sync {
     /// Map a schema to a field type.
+    #[must_use]
     fn map_schema(&self, schema: &Schema) -> FieldType {
         schema_to_field_type(schema)
     }
 
     /// Map a type override string to a field type.
     /// Returns `None` if the override is not recognized.
+    #[must_use]
     fn map_override(&self, override_str: &str) -> Option<FieldType> {
         match override_str {
             "bool" | "boolean" => Some(FieldType::Boolean),

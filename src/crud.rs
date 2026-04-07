@@ -44,6 +44,7 @@ impl CrudGroup {
 /// Consumers can override for custom resource grouping strategies.
 pub trait CrudGrouper: Send + Sync {
     /// Group operations into CRUD sets.
+    #[must_use]
     fn group(&self, ops: &[ResolvedOp]) -> Vec<CrudGroup>;
 }
 

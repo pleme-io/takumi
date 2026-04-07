@@ -1,6 +1,6 @@
 use sekkei::{OpenApiSpec, all_operations};
 
-use crate::field_type::{FieldType, schema_to_field_type};
+use crate::field_type::FieldType;
 
 /// A fully resolved operation with typed parameters and response.
 #[derive(Debug, Clone)]
@@ -166,7 +166,7 @@ pub fn resolve(spec: &OpenApiSpec) -> ResolvedSpec {
         for (name, schema) in &components.schemas {
             let mut fields = Vec::new();
             for (field_name, field_schema) in &schema.properties {
-                let field_type = schema_to_field_type(field_schema);
+                let field_type = FieldType::from(field_schema);
                 let required = schema.required.contains(field_name);
                 fields.push(ResolvedField {
                     name: field_name.clone(),
@@ -201,7 +201,7 @@ fn resolve_param(spec: &OpenApiSpec, param: &sekkei::Parameter) -> Option<Resolv
     let field_type = p
         .schema
         .as_ref()
-        .map_or(FieldType::Any, schema_to_field_type);
+        .map_or(FieldType::Any, FieldType::from);
     Some(ResolvedParam {
         name: p.name.clone(),
         location: p.location.clone(),
@@ -229,7 +229,7 @@ fn resolve_request_body(
         .get("application/json")
         .and_then(|mt| mt.schema.as_ref())?;
 
-    let field_type = schema_to_field_type(schema);
+    let field_type = FieldType::from(schema);
     Some(ResolvedBody {
         required: actual_body.required,
         field_type,
@@ -253,7 +253,7 @@ fn resolve_response_type(spec: &OpenApiSpec, op: &sekkei::Operation) -> Option<F
 
     let content = actual_response.content.as_ref()?;
     let schema = content.get("application/json")?.schema.as_ref()?;
-    Some(schema_to_field_type(schema))
+    Some(FieldType::from(schema))
 }
 
 #[cfg(test)]
