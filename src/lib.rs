@@ -1,6 +1,6 @@
-//! Takumi (匠) — OpenAPI to typed IR resolution pipeline.
+//! Takumi (匠) — `OpenAPI` to typed IR resolution pipeline.
 //!
-//! Lowers OpenAPI specs (via `sekkei` types) into resolved, typed
+//! Lowers `OpenAPI` specs (via `sekkei` types) into resolved, typed
 //! intermediate representations suitable for code generation.
 
 pub mod crud;

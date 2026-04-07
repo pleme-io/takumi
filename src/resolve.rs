@@ -79,8 +79,7 @@ pub fn resolve(spec: &OpenApiSpec) -> Result<ResolvedSpec> {
                     let field_type = p
                         .schema
                         .as_ref()
-                        .map(|s| schema_to_field_type(s))
-                        .unwrap_or(FieldType::Any);
+                        .map_or(FieldType::Any, schema_to_field_type);
                     parameters.push(ResolvedParam {
                         name: p.name.clone(),
                         location: p.location.clone(),
@@ -110,8 +109,7 @@ pub fn resolve(spec: &OpenApiSpec) -> Result<ResolvedSpec> {
                 let field_type = p
                     .schema
                     .as_ref()
-                    .map(|s| schema_to_field_type(s))
-                    .unwrap_or(FieldType::Any);
+                    .map_or(FieldType::Any, schema_to_field_type);
                 parameters.push(ResolvedParam {
                     name: p.name.clone(),
                     location: p.location.clone(),

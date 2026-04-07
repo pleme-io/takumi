@@ -71,9 +71,9 @@ impl FieldType {
     }
 }
 
-/// Trait for customizing how OpenAPI schemas map to field types.
+/// Trait for customizing how `OpenAPI` schemas map to field types.
 ///
-/// Default implementation handles standard OpenAPI to `FieldType` mapping.
+/// Default implementation handles standard `OpenAPI` to `FieldType` mapping.
 /// Consumers can override for platform-specific type handling.
 pub trait TypeMapper: Send + Sync {
     /// Map a schema to a field type.
@@ -95,7 +95,7 @@ pub trait TypeMapper: Send + Sync {
     }
 }
 
-/// Default type mapper using standard OpenAPI to `FieldType` mapping.
+/// Default type mapper using standard `OpenAPI` to `FieldType` mapping.
 pub struct DefaultTypeMapper;
 impl TypeMapper for DefaultTypeMapper {}
 
@@ -117,8 +117,7 @@ pub fn schema_to_field_type(schema: &Schema) -> FieldType {
             let inner = schema
                 .items
                 .as_ref()
-                .map(|s| schema_to_field_type(s))
-                .unwrap_or(FieldType::Any);
+                .map_or(FieldType::Any, |s| schema_to_field_type(s));
             FieldType::Array(Box::new(inner))
         }
         Some("object") => {
@@ -137,30 +136,28 @@ pub fn schema_to_field_type(schema: &Schema) -> FieldType {
             }
         }
         _ => {
-            // Check allOf/oneOf/anyOf for a $ref.
-            if !schema.all_of.is_empty() {
-                if let Some(first_ref) = schema.all_of.iter().find(|s| s.ref_path.is_some()) {
-                    let name = sekkei::ref_name(first_ref.ref_path.as_deref().unwrap());
-                    return FieldType::Object(name.to_string());
-                }
+            if let Some(first_ref) = schema.all_of.iter().find(|s| s.ref_path.is_some())
+                && let Some(ref_path) = first_ref.ref_path.as_deref()
+            {
+                let name = sekkei::ref_name(ref_path);
+                return FieldType::Object(name.to_string());
             }
             FieldType::Any
         }
     };
 
-    // Apply enum constraint if present.
-    if let Some(values) = &schema.enum_values {
-        if !values.is_empty() {
-            let string_values: Vec<String> = values
-                .iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect();
-            if !string_values.is_empty() {
-                return FieldType::Enum {
-                    values: string_values,
-                    underlying: Box::new(base_type),
-                };
-            }
+    if let Some(values) = &schema.enum_values
+        && !values.is_empty()
+    {
+        let string_values: Vec<String> = values
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+        if !string_values.is_empty() {
+            return FieldType::Enum {
+                values: string_values,
+                underlying: Box::new(base_type),
+            };
         }
     }
 
