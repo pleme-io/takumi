@@ -1,4 +1,3 @@
-use anyhow::Result;
 use sekkei::{OpenApiSpec, all_operations};
 
 use crate::field_type::{FieldType, schema_to_field_type};
@@ -60,7 +59,8 @@ pub struct ResolvedSpec {
 }
 
 /// Resolve an `OpenApiSpec` into typed operations and schemas.
-pub fn resolve(spec: &OpenApiSpec) -> Result<ResolvedSpec> {
+#[must_use]
+pub fn resolve(spec: &OpenApiSpec) -> ResolvedSpec {
     let mut operations = Vec::new();
 
     for (method, path, op) in all_operations(spec) {
@@ -165,10 +165,10 @@ pub fn resolve(spec: &OpenApiSpec) -> Result<ResolvedSpec> {
         }
     }
 
-    Ok(ResolvedSpec {
+    ResolvedSpec {
         operations,
         schemas,
-    })
+    }
 }
 
 fn resolve_request_body(
@@ -318,7 +318,7 @@ components:
     #[test]
     fn resolve_operations_count() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         // GET /pets, POST /pets, GET /pets/{petId}, DELETE /pets/{petId}
         assert_eq!(resolved.operations.len(), 4);
     }
@@ -326,7 +326,7 @@ components:
     #[test]
     fn resolve_list_pets() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let list = resolved
             .operations
             .iter()
@@ -350,7 +350,7 @@ components:
     #[test]
     fn resolve_create_pet() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let create = resolved
             .operations
             .iter()
@@ -372,7 +372,7 @@ components:
     #[test]
     fn resolve_path_level_params() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let get_pet = resolved
             .operations
             .iter()
@@ -387,7 +387,7 @@ components:
     #[test]
     fn resolve_schemas() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         assert_eq!(resolved.schemas.len(), 2);
         let pet = &resolved.schemas["Pet"];
         assert_eq!(pet.fields.len(), 3);
@@ -407,7 +407,7 @@ components:
     #[test]
     fn resolve_no_response_type() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let delete = resolved
             .operations
             .iter()
@@ -419,7 +419,7 @@ components:
     #[test]
     fn resolve_tags() {
         let spec = load_pet_store();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let list = resolved
             .operations
             .iter()
@@ -437,7 +437,7 @@ info:
 paths: {}
 "#;
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         assert!(resolved.operations.is_empty());
         assert!(resolved.schemas.is_empty());
     }
@@ -472,7 +472,7 @@ components:
           type: string
 "##;
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let list_op = &resolved.operations[0];
         assert_eq!(list_op.parameters.len(), 1);
         assert_eq!(list_op.parameters[0].name, "filter");
@@ -510,7 +510,7 @@ components:
                 type: string
 "##;
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let create_op = &resolved.operations[0];
         assert!(create_op.request_body.is_some());
         assert!(create_op.request_body.as_ref().unwrap().required);
@@ -534,7 +534,7 @@ paths:
           description: OK
 "#;
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         let list_op = &resolved.operations[0];
         assert_eq!(list_op.tags, vec!["items", "public"]);
     }
@@ -553,7 +553,7 @@ paths:
           description: OK
 "#;
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
-        let resolved = resolve(&spec).unwrap();
+        let resolved = resolve(&spec);
         assert_eq!(resolved.operations.len(), 1);
         assert!(resolved.operations[0].id.is_none());
     }
