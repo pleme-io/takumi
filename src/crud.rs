@@ -68,20 +68,13 @@ pub fn group_crud(ops: &[ResolvedOp]) -> Vec<CrudGroup> {
 /// Extract the base path without parameter segments.
 /// `/pets/{petId}/toys/{toyId}` -> `/pets`
 fn extract_base_path(path: &str) -> String {
-    let segments: Vec<&str> = path.split('/').collect();
-    let mut base = Vec::new();
-    for seg in &segments {
-        if seg.starts_with('{') {
-            break;
-        }
-        base.push(*seg);
-    }
-    let result = base.join("/");
-    if result.is_empty() {
-        "/".to_string()
-    } else {
-        result
-    }
+    let result: String = path
+        .split('/')
+        .take_while(|seg| !seg.starts_with('{'))
+        .collect::<Vec<_>>()
+        .join("/");
+
+    if result.is_empty() { "/".into() } else { result }
 }
 
 /// Convert a path to a resource name.
