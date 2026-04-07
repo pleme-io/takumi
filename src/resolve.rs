@@ -66,57 +66,22 @@ pub fn resolve(spec: &OpenApiSpec) -> ResolvedSpec {
     for (method, path, op) in all_operations(spec) {
         let mut parameters = Vec::new();
 
-        // Path-level parameters.
         if let Some(path_item) = spec.paths.get(&path) {
             for param in &path_item.parameters {
-                // Resolve $ref parameters.
-                let resolved_param = if let Some(ref_path) = &param.ref_path {
-                    spec.resolve_parameter_ref(ref_path)
-                } else {
-                    Some(param)
-                };
-                if let Some(p) = resolved_param {
-                    let field_type = p
-                        .schema
-                        .as_ref()
-                        .map_or(FieldType::Any, schema_to_field_type);
-                    parameters.push(ResolvedParam {
-                        name: p.name.clone(),
-                        location: p.location.clone(),
-                        required: p.required,
-                        description: p.description.clone(),
-                        field_type,
-                    });
+                if let Some(rp) = resolve_param(spec, param) {
+                    parameters.push(rp);
                 }
             }
         }
 
-        // Operation-level parameters.
         for param in &op.parameters {
-            let resolved_param = if let Some(ref_path) = &param.ref_path {
-                spec.resolve_parameter_ref(ref_path)
-            } else {
-                Some(param)
-            };
-            if let Some(p) = resolved_param {
-                // Skip if already added from path-level (same name + location).
-                if parameters
+            if let Some(rp) = resolve_param(spec, param) {
+                let already_present = parameters
                     .iter()
-                    .any(|existing| existing.name == p.name && existing.location == p.location)
-                {
-                    continue;
+                    .any(|existing| existing.name == rp.name && existing.location == rp.location);
+                if !already_present {
+                    parameters.push(rp);
                 }
-                let field_type = p
-                    .schema
-                    .as_ref()
-                    .map_or(FieldType::Any, schema_to_field_type);
-                parameters.push(ResolvedParam {
-                    name: p.name.clone(),
-                    location: p.location.clone(),
-                    required: p.required,
-                    description: p.description.clone(),
-                    field_type,
-                });
             }
         }
 
@@ -169,6 +134,25 @@ pub fn resolve(spec: &OpenApiSpec) -> ResolvedSpec {
         operations,
         schemas,
     }
+}
+
+fn resolve_param(spec: &OpenApiSpec, param: &sekkei::Parameter) -> Option<ResolvedParam> {
+    let p = if let Some(ref_path) = &param.ref_path {
+        spec.resolve_parameter_ref(ref_path)?
+    } else {
+        param
+    };
+    let field_type = p
+        .schema
+        .as_ref()
+        .map_or(FieldType::Any, schema_to_field_type);
+    Some(ResolvedParam {
+        name: p.name.clone(),
+        location: p.location.clone(),
+        required: p.required,
+        description: p.description.clone(),
+        field_type,
+    })
 }
 
 fn resolve_request_body(
