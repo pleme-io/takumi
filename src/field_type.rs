@@ -5,6 +5,7 @@ use sekkei::Schema;
 
 /// Platform-independent field type for code generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum FieldType {
     String,
     Integer,
