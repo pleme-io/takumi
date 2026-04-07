@@ -1,9 +1,10 @@
+use serde::{Deserialize, Serialize};
 use sekkei::{OpenApiSpec, all_operations};
 
 use crate::field_type::FieldType;
 
 /// A fully resolved operation with typed parameters and response.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedOp {
     pub id: Option<String>,
     pub method: String,
@@ -17,7 +18,7 @@ pub struct ResolvedOp {
 }
 
 /// A resolved parameter with typed field.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedParam {
     pub name: String,
     pub location: String,
@@ -27,7 +28,7 @@ pub struct ResolvedParam {
 }
 
 /// A resolved request body.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedBody {
     pub required: bool,
     pub field_type: FieldType,
@@ -35,7 +36,7 @@ pub struct ResolvedBody {
 }
 
 /// A fully resolved schema with named fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedSchema {
     pub name: String,
     pub fields: Vec<ResolvedField>,
@@ -43,7 +44,7 @@ pub struct ResolvedSchema {
 }
 
 /// A named, typed field in a resolved schema.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedField {
     pub name: String,
     pub field_type: FieldType,
@@ -52,7 +53,7 @@ pub struct ResolvedField {
 }
 
 /// Complete resolved spec.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedSpec {
     pub operations: Vec<ResolvedOp>,
     pub schemas: indexmap::IndexMap<String, ResolvedSchema>,
@@ -1396,6 +1397,17 @@ paths:
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
         let resolved = resolve(&spec);
         assert!(resolved.operations[0].response_type.is_none());
+    }
+
+    // ── Serde round-trip ─────────────────────────────────────
+
+    #[test]
+    fn resolved_spec_serde_roundtrip() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let json = serde_json::to_string(&resolved).unwrap();
+        let back: ResolvedSpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(resolved, back);
     }
 
     // ── ResolvedSpec constructors ─────────────────────────────
