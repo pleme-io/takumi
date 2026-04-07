@@ -37,6 +37,33 @@ impl fmt::Display for FieldType {
     }
 }
 
+impl Default for FieldType {
+    fn default() -> Self {
+        Self::Any
+    }
+}
+
+impl std::str::FromStr for FieldType {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "String" => Self::String,
+            "Integer" => Self::Integer,
+            "Number" => Self::Number,
+            "Boolean" => Self::Boolean,
+            "Any" => Self::Any,
+            other => Self::Object(other.to_string()),
+        })
+    }
+}
+
+impl From<&Schema> for FieldType {
+    fn from(schema: &Schema) -> Self {
+        schema_to_field_type(schema)
+    }
+}
+
 impl FieldType {
     /// Check if this is a primitive type.
     #[must_use]
@@ -852,5 +879,62 @@ mod tests {
         let ft = FieldType::String;
         let debug = format!("{ft:?}");
         assert!(debug.contains("String"));
+    }
+
+    // ── Default impl ────────────────────────────────────────────
+
+    #[test]
+    fn field_type_default_is_any() {
+        assert_eq!(FieldType::default(), FieldType::Any);
+    }
+
+    // ── FromStr round-trip ──────────────────────────────────────
+
+    #[test]
+    fn field_type_from_str_primitives() {
+        assert_eq!("String".parse::<FieldType>().unwrap(), FieldType::String);
+        assert_eq!("Integer".parse::<FieldType>().unwrap(), FieldType::Integer);
+        assert_eq!("Number".parse::<FieldType>().unwrap(), FieldType::Number);
+        assert_eq!("Boolean".parse::<FieldType>().unwrap(), FieldType::Boolean);
+        assert_eq!("Any".parse::<FieldType>().unwrap(), FieldType::Any);
+    }
+
+    #[test]
+    fn field_type_from_str_object() {
+        assert_eq!(
+            "Pet".parse::<FieldType>().unwrap(),
+            FieldType::Object("Pet".to_string())
+        );
+    }
+
+    #[test]
+    fn field_type_display_from_str_roundtrip() {
+        for ft in [
+            FieldType::String,
+            FieldType::Integer,
+            FieldType::Number,
+            FieldType::Boolean,
+            FieldType::Any,
+        ] {
+            let s = ft.to_string();
+            let parsed: FieldType = s.parse().unwrap();
+            assert_eq!(ft, parsed);
+        }
+    }
+
+    // ── From<&Schema> ───────────────────────────────────────────
+
+    #[test]
+    fn field_type_from_schema() {
+        let s = string_schema();
+        let ft: FieldType = (&s).into();
+        assert_eq!(ft, FieldType::String);
+    }
+
+    #[test]
+    fn field_type_from_schema_integer() {
+        let s = integer_schema();
+        let ft: FieldType = FieldType::from(&s);
+        assert_eq!(ft, FieldType::Integer);
     }
 }
