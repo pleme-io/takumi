@@ -11,6 +11,33 @@ pub struct CrudGroup {
     pub list: Option<ResolvedOp>,
 }
 
+impl CrudGroup {
+    /// Returns an iterator over all populated operations in the group.
+    pub fn operations(&self) -> impl Iterator<Item = &ResolvedOp> {
+        [
+            self.create.as_ref(),
+            self.read.as_ref(),
+            self.update.as_ref(),
+            self.delete.as_ref(),
+            self.list.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+    }
+
+    /// Returns the count of populated CRUD slots (0–5).
+    #[must_use]
+    pub fn operation_count(&self) -> usize {
+        self.operations().count()
+    }
+
+    /// Returns `true` when all five CRUD slots are populated.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.operation_count() == 5
+    }
+}
+
 /// Trait for customizing CRUD grouping logic.
 ///
 /// Default implementation groups by HTTP method + path patterns.
@@ -347,5 +374,56 @@ mod tests {
         let ops = vec![make_op("get", "/pets", "listPets")];
         let groups = grouper.group(&ops);
         assert_eq!(groups.len(), 1);
+    }
+
+    // ── CrudGroup helper methods ─────────────────────────────────
+
+    #[test]
+    fn crud_group_operations_iterator() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/pets/{petId}", "getPet"),
+        ];
+        let groups = group_crud(&ops);
+        let g = &groups[0];
+        assert_eq!(g.operations().count(), 3);
+    }
+
+    #[test]
+    fn crud_group_operation_count() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+        ];
+        let groups = group_crud(&ops);
+        assert_eq!(groups[0].operation_count(), 2);
+    }
+
+    #[test]
+    fn crud_group_is_complete() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/pets/{petId}", "getPet"),
+            make_op("put", "/pets/{petId}", "updatePet"),
+            make_op("delete", "/pets/{petId}", "deletePet"),
+        ];
+        let groups = group_crud(&ops);
+        assert!(groups[0].is_complete());
+    }
+
+    #[test]
+    fn crud_group_not_complete() {
+        let ops = vec![make_op("get", "/pets", "listPets")];
+        let groups = group_crud(&ops);
+        assert!(!groups[0].is_complete());
+    }
+
+    #[test]
+    fn crud_group_empty_operations_count() {
+        let ops = vec![make_op("options", "/pets", "optionsPets")];
+        let groups = group_crud(&ops);
+        assert_eq!(groups[0].operation_count(), 0);
     }
 }
