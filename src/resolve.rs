@@ -85,6 +85,80 @@ impl ResolvedSpec {
     pub fn is_empty(&self) -> bool {
         self.operations.is_empty() && self.schemas.is_empty()
     }
+
+    /// Resolve an `OpenApiSpec` into typed operations and schemas.
+    #[must_use]
+    pub fn from_spec(spec: &OpenApiSpec) -> Self {
+        let operations = all_operations(spec)
+            .into_iter()
+            .map(|(method, path, op)| {
+                let mut parameters = Vec::new();
+
+                if let Some(path_item) = spec.paths.get(&path) {
+                    for param in &path_item.parameters {
+                        if let Some(rp) = resolve_param(spec, param) {
+                            parameters.push(rp);
+                        }
+                    }
+                }
+
+                for param in &op.parameters {
+                    if let Some(rp) = resolve_param(spec, param) {
+                        let already_present = parameters
+                            .iter()
+                            .any(|existing| existing.name == rp.name && existing.location == rp.location);
+                        if !already_present {
+                            parameters.push(rp);
+                        }
+                    }
+                }
+
+                ResolvedOp {
+                    id: op.operation_id.clone(),
+                    method,
+                    path,
+                    summary: op.summary.clone(),
+                    description: op.description.clone(),
+                    parameters,
+                    request_body: resolve_request_body(spec, op),
+                    response_type: resolve_response_type(spec, op),
+                    tags: op.tags.clone(),
+                }
+            })
+            .collect();
+
+        let schemas = spec
+            .components
+            .iter()
+            .flat_map(|c| &c.schemas)
+            .map(|(name, schema)| {
+                let fields = schema
+                    .properties
+                    .iter()
+                    .map(|(field_name, field_schema)| ResolvedField {
+                        name: field_name.clone(),
+                        field_type: FieldType::from(field_schema),
+                        required: schema.required.contains(field_name),
+                        description: field_schema.description.clone(),
+                    })
+                    .collect();
+
+                (
+                    name.clone(),
+                    ResolvedSchema {
+                        name: name.clone(),
+                        fields,
+                        description: schema.description.clone(),
+                    },
+                )
+            })
+            .collect();
+
+        Self {
+            operations,
+            schemas,
+        }
+    }
 }
 
 impl ResolvedOp {
@@ -115,81 +189,11 @@ impl ResolvedSchema {
 }
 
 /// Resolve an `OpenApiSpec` into typed operations and schemas.
+///
+/// Convenience wrapper around [`ResolvedSpec::from_spec`].
 #[must_use]
 pub fn resolve(spec: &OpenApiSpec) -> ResolvedSpec {
-    let mut operations = Vec::new();
-
-    for (method, path, op) in all_operations(spec) {
-        let mut parameters = Vec::new();
-
-        if let Some(path_item) = spec.paths.get(&path) {
-            for param in &path_item.parameters {
-                if let Some(rp) = resolve_param(spec, param) {
-                    parameters.push(rp);
-                }
-            }
-        }
-
-        for param in &op.parameters {
-            if let Some(rp) = resolve_param(spec, param) {
-                let already_present = parameters
-                    .iter()
-                    .any(|existing| existing.name == rp.name && existing.location == rp.location);
-                if !already_present {
-                    parameters.push(rp);
-                }
-            }
-        }
-
-        // Request body.
-        let request_body = resolve_request_body(spec, op);
-
-        // Response type (from 200/201 response).
-        let response_type = resolve_response_type(spec, op);
-
-        operations.push(ResolvedOp {
-            id: op.operation_id.clone(),
-            method,
-            path,
-            summary: op.summary.clone(),
-            description: op.description.clone(),
-            parameters,
-            request_body,
-            response_type,
-            tags: op.tags.clone(),
-        });
-    }
-
-    // Resolve schemas.
-    let mut schemas = indexmap::IndexMap::new();
-    if let Some(components) = &spec.components {
-        for (name, schema) in &components.schemas {
-            let mut fields = Vec::new();
-            for (field_name, field_schema) in &schema.properties {
-                let field_type = FieldType::from(field_schema);
-                let required = schema.required.contains(field_name);
-                fields.push(ResolvedField {
-                    name: field_name.clone(),
-                    field_type,
-                    required,
-                    description: field_schema.description.clone(),
-                });
-            }
-            schemas.insert(
-                name.clone(),
-                ResolvedSchema {
-                    name: name.clone(),
-                    fields,
-                    description: schema.description.clone(),
-                },
-            );
-        }
-    }
-
-    ResolvedSpec {
-        operations,
-        schemas,
-    }
+    ResolvedSpec::from_spec(spec)
 }
 
 fn resolve_param(spec: &OpenApiSpec, param: &sekkei::Parameter) -> Option<ResolvedParam> {
