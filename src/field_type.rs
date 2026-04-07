@@ -537,4 +537,319 @@ mod tests {
         assert_eq!(mapper.map_schema(&string_schema()), FieldType::String);
         assert_eq!(mapper.map_schema(&integer_schema()), FieldType::Integer);
     }
+
+    // ── Serde round-trip ─────────────────────────────────────────
+
+    #[test]
+    fn serde_roundtrip_string() {
+        let ft = FieldType::String;
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_integer() {
+        let ft = FieldType::Integer;
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_array() {
+        let ft = FieldType::Array(Box::new(FieldType::Number));
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_map() {
+        let ft = FieldType::Map(Box::new(FieldType::Boolean));
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_object() {
+        let ft = FieldType::Object("User".to_string());
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_enum() {
+        let ft = FieldType::Enum {
+            values: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_any() {
+        let ft = FieldType::Any;
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_nested() {
+        let ft = FieldType::Array(Box::new(FieldType::Map(Box::new(FieldType::Object(
+            "Item".to_string(),
+        )))));
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    // ── schema_to_field_type edge cases ──────────────────────────
+
+    #[test]
+    fn ref_takes_precedence_over_type() {
+        let s = Schema {
+            schema_type: Some("string".to_string()),
+            ref_path: Some("#/components/schemas/Name".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Object("Name".to_string())
+        );
+    }
+
+    #[test]
+    fn all_of_without_ref_is_any() {
+        let s = Schema {
+            all_of: vec![Schema {
+                schema_type: Some("object".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert_eq!(schema_to_field_type(&s), FieldType::Any);
+    }
+
+    #[test]
+    fn all_of_multiple_refs_uses_first() {
+        let s = Schema {
+            all_of: vec![
+                Schema {
+                    ref_path: Some("#/components/schemas/First".to_string()),
+                    ..Default::default()
+                },
+                Schema {
+                    ref_path: Some("#/components/schemas/Second".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Object("First".to_string())
+        );
+    }
+
+    #[test]
+    fn enum_with_empty_values_is_base_type() {
+        let s = Schema {
+            schema_type: Some("string".to_string()),
+            enum_values: Some(vec![]),
+            ..Default::default()
+        };
+        assert_eq!(schema_to_field_type(&s), FieldType::String);
+    }
+
+    #[test]
+    fn enum_with_non_string_values_filters() {
+        let s = Schema {
+            schema_type: Some("integer".to_string()),
+            enum_values: Some(vec![
+                serde_json::Value::Number(1.into()),
+                serde_json::Value::Number(2.into()),
+            ]),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Integer,
+            "non-string enum values are filtered out, no Enum variant created"
+        );
+    }
+
+    #[test]
+    fn map_with_integer_values() {
+        let s = Schema {
+            schema_type: Some("object".to_string()),
+            additional_properties: Some(Box::new(integer_schema())),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Map(Box::new(FieldType::Integer))
+        );
+    }
+
+    #[test]
+    fn map_with_nested_object_values() {
+        let s = Schema {
+            schema_type: Some("object".to_string()),
+            additional_properties: Some(Box::new(Schema {
+                ref_path: Some("#/components/schemas/Widget".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Map(Box::new(FieldType::Object("Widget".to_string())))
+        );
+    }
+
+    #[test]
+    fn array_of_refs() {
+        let s = Schema {
+            schema_type: Some("array".to_string()),
+            items: Some(Box::new(Schema {
+                ref_path: Some("#/components/schemas/Tag".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Array(Box::new(FieldType::Object("Tag".to_string())))
+        );
+    }
+
+    #[test]
+    fn unrecognized_type_string_is_any() {
+        let s = Schema {
+            schema_type: Some("custom".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(schema_to_field_type(&s), FieldType::Any);
+    }
+
+    // ── FieldType enum edge cases ────────────────────────────────
+
+    #[test]
+    fn field_type_enum_not_primitive() {
+        let e = FieldType::Enum {
+            values: vec!["a".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        assert!(!e.is_primitive());
+    }
+
+    #[test]
+    fn field_type_enum_not_collection() {
+        let e = FieldType::Enum {
+            values: vec!["a".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        assert!(!e.is_collection());
+    }
+
+    #[test]
+    fn field_type_enum_no_inner_type() {
+        let e = FieldType::Enum {
+            values: vec!["a".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        assert!(e.inner_type().is_none());
+    }
+
+    #[test]
+    fn field_type_display_single_enum_value() {
+        let e = FieldType::Enum {
+            values: vec!["only".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        assert_eq!(e.to_string(), "Enum(only)");
+    }
+
+    #[test]
+    fn field_type_display_map_with_complex_value() {
+        let ft = FieldType::Map(Box::new(FieldType::Array(Box::new(FieldType::Integer))));
+        assert_eq!(ft.to_string(), "Map<String, Array<Integer>>");
+    }
+
+    // ── Custom TypeMapper ────────────────────────────────────────
+
+    struct CustomMapper;
+    impl TypeMapper for CustomMapper {
+        fn map_schema(&self, _schema: &Schema) -> FieldType {
+            FieldType::String
+        }
+
+        fn map_override(&self, override_str: &str) -> Option<FieldType> {
+            if override_str == "uuid" {
+                Some(FieldType::String)
+            } else {
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn custom_type_mapper_map_schema() {
+        let mapper = CustomMapper;
+        assert_eq!(mapper.map_schema(&integer_schema()), FieldType::String);
+    }
+
+    #[test]
+    fn custom_type_mapper_map_override() {
+        let mapper = CustomMapper;
+        assert_eq!(mapper.map_override("uuid"), Some(FieldType::String));
+        assert_eq!(mapper.map_override("int"), None);
+    }
+
+    #[test]
+    fn type_mapper_as_trait_object() {
+        let mapper: Box<dyn TypeMapper> = Box::new(DefaultTypeMapper);
+        assert_eq!(mapper.map_schema(&string_schema()), FieldType::String);
+        assert_eq!(mapper.map_override("int"), Some(FieldType::Integer));
+    }
+
+    // ── FieldType equality ───────────────────────────────────────
+
+    #[test]
+    fn field_type_equality() {
+        assert_eq!(FieldType::String, FieldType::String);
+        assert_ne!(FieldType::String, FieldType::Integer);
+        assert_ne!(
+            FieldType::Array(Box::new(FieldType::String)),
+            FieldType::Array(Box::new(FieldType::Integer))
+        );
+        assert_eq!(
+            FieldType::Object("A".to_string()),
+            FieldType::Object("A".to_string())
+        );
+        assert_ne!(
+            FieldType::Object("A".to_string()),
+            FieldType::Object("B".to_string())
+        );
+    }
+
+    #[test]
+    fn field_type_clone() {
+        let original = FieldType::Array(Box::new(FieldType::Object("Test".to_string())));
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn field_type_debug() {
+        let ft = FieldType::String;
+        let debug = format!("{ft:?}");
+        assert!(debug.contains("String"));
+    }
 }
