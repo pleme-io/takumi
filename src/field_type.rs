@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sekkei::Schema;
 
 /// Platform-independent field type for code generation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum FieldType {
     String,
@@ -94,6 +94,27 @@ impl FieldType {
     pub fn enum_values(&self) -> Option<&[std::string::String]> {
         match self {
             Self::Enum { values, .. } => Some(values),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` if this is an Object type.
+    #[must_use]
+    pub fn is_object(&self) -> bool {
+        matches!(self, Self::Object(_))
+    }
+
+    /// Returns `true` if this is an Enum type.
+    #[must_use]
+    pub fn is_enum(&self) -> bool {
+        matches!(self, Self::Enum { .. })
+    }
+
+    /// Returns the object name if this is an Object type.
+    #[must_use]
+    pub fn object_name(&self) -> Option<&str> {
+        match self {
+            Self::Object(name) => Some(name),
             _ => None,
         }
     }
@@ -938,5 +959,45 @@ mod tests {
         let s = integer_schema();
         let ft: FieldType = FieldType::from(&s);
         assert_eq!(ft, FieldType::Integer);
+    }
+
+    // ── is_object / is_enum / object_name ───────────────────────
+
+    #[test]
+    fn field_type_is_object() {
+        assert!(FieldType::Object("Pet".to_string()).is_object());
+        assert!(!FieldType::String.is_object());
+        assert!(!FieldType::Array(Box::new(FieldType::Any)).is_object());
+    }
+
+    #[test]
+    fn field_type_is_enum() {
+        let e = FieldType::Enum {
+            values: vec!["a".to_string()],
+            underlying: Box::new(FieldType::String),
+        };
+        assert!(e.is_enum());
+        assert!(!FieldType::String.is_enum());
+    }
+
+    #[test]
+    fn field_type_object_name() {
+        assert_eq!(
+            FieldType::Object("User".to_string()).object_name(),
+            Some("User")
+        );
+        assert_eq!(FieldType::String.object_name(), None);
+    }
+
+    // ── Hash ────────────────────────────────────────────────────
+
+    #[test]
+    fn field_type_hashable() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(FieldType::String);
+        set.insert(FieldType::Integer);
+        set.insert(FieldType::String);
+        assert_eq!(set.len(), 2);
     }
 }

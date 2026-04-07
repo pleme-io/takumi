@@ -188,6 +188,12 @@ impl ResolvedSchema {
     }
 }
 
+impl From<&OpenApiSpec> for ResolvedSpec {
+    fn from(spec: &OpenApiSpec) -> Self {
+        Self::from_spec(spec)
+    }
+}
+
 /// Resolve an `OpenApiSpec` into typed operations and schemas.
 ///
 /// Convenience wrapper around [`ResolvedSpec::from_spec`].
@@ -1390,6 +1396,24 @@ paths:
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
         let resolved = resolve(&spec);
         assert!(resolved.operations[0].response_type.is_none());
+    }
+
+    // ── ResolvedSpec constructors ─────────────────────────────
+
+    #[test]
+    fn resolved_spec_from_spec() {
+        let spec = load_pet_store();
+        let resolved = ResolvedSpec::from_spec(&spec);
+        assert_eq!(resolved.operations.len(), 4);
+        assert_eq!(resolved.schemas.len(), 2);
+    }
+
+    #[test]
+    fn resolved_spec_from_trait() {
+        let spec = load_pet_store();
+        let resolved = ResolvedSpec::from(&spec);
+        assert_eq!(resolved.operations.len(), 4);
+        assert_eq!(resolved.schemas.len(), 2);
     }
 
     // ── ResolvedSpec helpers ────────────────────────────────────
