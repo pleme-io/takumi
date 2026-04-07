@@ -58,6 +58,62 @@ pub struct ResolvedSpec {
     pub schemas: indexmap::IndexMap<String, ResolvedSchema>,
 }
 
+impl ResolvedSpec {
+    /// Find an operation by its `operation_id`.
+    #[must_use]
+    pub fn find_operation(&self, operation_id: &str) -> Option<&ResolvedOp> {
+        self.operations
+            .iter()
+            .find(|op| op.id.as_deref() == Some(operation_id))
+    }
+
+    /// Find all operations matching a given HTTP method.
+    pub fn operations_by_method<'a>(&'a self, method: &'a str) -> impl Iterator<Item = &'a ResolvedOp> {
+        self.operations
+            .iter()
+            .filter(move |op| op.method == method)
+    }
+
+    /// Find a schema by name.
+    #[must_use]
+    pub fn find_schema(&self, name: &str) -> Option<&ResolvedSchema> {
+        self.schemas.get(name)
+    }
+
+    /// Returns `true` if the spec contains no operations and no schemas.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.operations.is_empty() && self.schemas.is_empty()
+    }
+}
+
+impl ResolvedOp {
+    /// Returns `true` if the operation has a request body.
+    #[must_use]
+    pub fn has_body(&self) -> bool {
+        self.request_body.is_some()
+    }
+
+    /// Returns parameters filtered by location (e.g. "path", "query", "header").
+    pub fn params_by_location<'a>(&'a self, location: &'a str) -> impl Iterator<Item = &'a ResolvedParam> {
+        self.parameters
+            .iter()
+            .filter(move |p| p.location == location)
+    }
+}
+
+impl ResolvedSchema {
+    /// Returns required fields.
+    pub fn required_fields(&self) -> impl Iterator<Item = &ResolvedField> {
+        self.fields.iter().filter(|f| f.required)
+    }
+
+    /// Returns optional fields.
+    pub fn optional_fields(&self) -> impl Iterator<Item = &ResolvedField> {
+        self.fields.iter().filter(|f| !f.required)
+    }
+}
+
 /// Resolve an `OpenApiSpec` into typed operations and schemas.
 #[must_use]
 pub fn resolve(spec: &OpenApiSpec) -> ResolvedSpec {
@@ -1330,5 +1386,98 @@ paths:
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
         let resolved = resolve(&spec);
         assert!(resolved.operations[0].response_type.is_none());
+    }
+
+    // ── ResolvedSpec helpers ────────────────────────────────────
+
+    #[test]
+    fn resolved_spec_find_operation() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        assert!(resolved.find_operation("listPets").is_some());
+        assert!(resolved.find_operation("nonexistent").is_none());
+    }
+
+    #[test]
+    fn resolved_spec_operations_by_method() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let gets: Vec<_> = resolved.operations_by_method("get").collect();
+        assert_eq!(gets.len(), 2);
+        let posts: Vec<_> = resolved.operations_by_method("post").collect();
+        assert_eq!(posts.len(), 1);
+    }
+
+    #[test]
+    fn resolved_spec_find_schema() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        assert!(resolved.find_schema("Pet").is_some());
+        assert!(resolved.find_schema("Missing").is_none());
+    }
+
+    #[test]
+    fn resolved_spec_is_empty() {
+        let yaml = r#"
+info:
+  title: Empty
+  version: "1.0.0"
+paths: {}
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        assert!(resolved.is_empty());
+
+        let full = resolve(&load_pet_store());
+        assert!(!full.is_empty());
+    }
+
+    // ── ResolvedOp helpers ──────────────────────────────────────
+
+    #[test]
+    fn resolved_op_has_body() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let create = resolved.find_operation("createPet").unwrap();
+        assert!(create.has_body());
+        let list = resolved.find_operation("listPets").unwrap();
+        assert!(!list.has_body());
+    }
+
+    #[test]
+    fn resolved_op_params_by_location() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let list = resolved.find_operation("listPets").unwrap();
+        let query_params: Vec<_> = list.params_by_location("query").collect();
+        assert_eq!(query_params.len(), 1);
+        assert_eq!(query_params[0].name, "limit");
+
+        let get_pet = resolved.find_operation("getPet").unwrap();
+        let path_params: Vec<_> = get_pet.params_by_location("path").collect();
+        assert_eq!(path_params.len(), 1);
+        assert_eq!(path_params[0].name, "petId");
+    }
+
+    // ── ResolvedSchema helpers ──────────────────────────────────
+
+    #[test]
+    fn resolved_schema_required_fields() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let pet = resolved.find_schema("Pet").unwrap();
+        let required: Vec<_> = pet.required_fields().collect();
+        assert_eq!(required.len(), 2);
+        assert!(required.iter().all(|f| f.required));
+    }
+
+    #[test]
+    fn resolved_schema_optional_fields() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let pet = resolved.find_schema("Pet").unwrap();
+        let optional: Vec<_> = pet.optional_fields().collect();
+        assert_eq!(optional.len(), 1);
+        assert!(optional.iter().all(|f| !f.required));
     }
 }
