@@ -3,7 +3,7 @@ use sekkei::{OpenApiSpec, all_operations};
 use crate::field_type::FieldType;
 
 /// A fully resolved operation with typed parameters and response.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedOp {
     pub id: Option<String>,
     pub method: String,
@@ -17,7 +17,7 @@ pub struct ResolvedOp {
 }
 
 /// A resolved parameter with typed field.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedParam {
     pub name: String,
     pub location: String,
@@ -27,7 +27,7 @@ pub struct ResolvedParam {
 }
 
 /// A resolved request body.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedBody {
     pub required: bool,
     pub field_type: FieldType,
@@ -35,7 +35,7 @@ pub struct ResolvedBody {
 }
 
 /// A fully resolved schema with named fields.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedSchema {
     pub name: String,
     pub fields: Vec<ResolvedField>,
@@ -43,7 +43,7 @@ pub struct ResolvedSchema {
 }
 
 /// A named, typed field in a resolved schema.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedField {
     pub name: String,
     pub field_type: FieldType,
