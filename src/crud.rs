@@ -427,4 +427,166 @@ mod tests {
         let groups = group_crud(&ops);
         assert_eq!(groups[0].operation_count(), 0);
     }
+
+    // ── CrudGroup operations iterator order ─────────────────────
+
+    #[test]
+    fn crud_group_operations_yields_in_create_read_update_delete_list_order() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/pets/{petId}", "getPet"),
+            make_op("put", "/pets/{petId}", "updatePet"),
+            make_op("delete", "/pets/{petId}", "deletePet"),
+        ];
+        let groups = group_crud(&ops);
+        let g = &groups[0];
+        let ids: Vec<Option<&str>> = g.operations().map(|o| o.id.as_deref()).collect();
+        // Order is: create, read, update, delete, list (as defined in operations())
+        assert_eq!(
+            ids,
+            vec![
+                Some("createPet"),
+                Some("getPet"),
+                Some("updatePet"),
+                Some("deletePet"),
+                Some("listPets"),
+            ]
+        );
+    }
+
+    // ── CrudGroup with only update and delete ───────────────────
+
+    #[test]
+    fn crud_group_partial_update_and_delete_only() {
+        let ops = vec![
+            make_op("put", "/items/{id}", "updateItem"),
+            make_op("delete", "/items/{id}", "deleteItem"),
+        ];
+        let groups = group_crud(&ops);
+        assert_eq!(groups.len(), 1);
+        let g = &groups[0];
+        assert!(g.create.is_none());
+        assert!(g.read.is_none());
+        assert!(g.update.is_some());
+        assert!(g.delete.is_some());
+        assert!(g.list.is_none());
+        assert_eq!(g.operation_count(), 2);
+        assert!(!g.is_complete());
+    }
+
+    // ── CrudGroup with exactly 4 ops is not complete ────────────
+
+    #[test]
+    fn crud_group_four_ops_is_not_complete() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/pets/{petId}", "getPet"),
+            make_op("delete", "/pets/{petId}", "deletePet"),
+        ];
+        let groups = group_crud(&ops);
+        assert_eq!(groups[0].operation_count(), 4);
+        assert!(!groups[0].is_complete());
+    }
+
+    // ── CrudGroup equality and clone ────────────────────────────
+
+    #[test]
+    fn crud_group_clone_equals_original() {
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+        ];
+        let groups = group_crud(&ops);
+        let cloned = groups[0].clone();
+        assert_eq!(groups[0], cloned);
+    }
+
+    #[test]
+    fn crud_group_different_groups_not_equal() {
+        let ops1 = vec![make_op("get", "/pets", "listPets")];
+        let ops2 = vec![make_op("get", "/users", "listUsers")];
+        let g1 = &group_crud(&ops1)[0];
+        let g2 = &group_crud(&ops2)[0];
+        assert_ne!(g1, g2);
+    }
+
+    // ── CRUD grouping: PATCH vs PUT on same resource ────────────
+
+    #[test]
+    fn patch_overwrites_put_for_update_slot() {
+        let ops = vec![
+            make_op("put", "/items/{id}", "replaceItem"),
+            make_op("patch", "/items/{id}", "patchItem"),
+        ];
+        let groups = group_crud(&ops);
+        // PATCH comes after PUT, so it should overwrite
+        assert_eq!(
+            groups[0].update.as_ref().unwrap().id.as_deref(),
+            Some("patchItem")
+        );
+    }
+
+    // ── CRUD grouping: multiple subresources ────────────────────
+
+    #[test]
+    fn nested_subresources_group_under_parent() {
+        let ops = vec![
+            make_op("get", "/users/{userId}/posts", "listUserPosts"),
+            make_op("post", "/users/{userId}/posts", "createUserPost"),
+            make_op("get", "/users/{userId}/comments", "listUserComments"),
+        ];
+        let groups = group_crud(&ops);
+        // All group under "users" since base path extraction stops at first param
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].name, "users");
+    }
+
+    // ── PathBasedGrouper trait ───────────────────────────────────
+
+    #[test]
+    fn path_based_grouper_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<PathBasedGrouper>();
+    }
+
+    #[test]
+    fn crud_grouper_as_trait_object() {
+        let grouper: Box<dyn CrudGrouper> = Box::new(PathBasedGrouper);
+        let ops = vec![
+            make_op("get", "/pets", "listPets"),
+            make_op("post", "/pets", "createPet"),
+            make_op("get", "/pets/{petId}", "getPet"),
+            make_op("put", "/pets/{petId}", "updatePet"),
+            make_op("delete", "/pets/{petId}", "deletePet"),
+        ];
+        let groups = grouper.group(&ops);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].is_complete());
+    }
+
+    // ── extract_base_path edge cases ────────────────────────────
+
+    #[test]
+    fn extract_base_path_no_leading_slash() {
+        assert_eq!(extract_base_path("pets"), "pets");
+    }
+
+    #[test]
+    fn extract_base_path_double_slash() {
+        assert_eq!(extract_base_path("//items"), "//items");
+    }
+
+    // ── path_to_resource_name edge cases ────────────────────────
+
+    #[test]
+    fn path_to_resource_name_trailing_slash() {
+        assert_eq!(path_to_resource_name("/items/"), "items");
+    }
+
+    #[test]
+    fn path_to_resource_name_deeply_nested() {
+        assert_eq!(path_to_resource_name("/api/v1/org/teams/members"), "members");
+    }
 }

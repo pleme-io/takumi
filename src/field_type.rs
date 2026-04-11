@@ -1040,4 +1040,318 @@ mod tests {
         set.insert(FieldType::String);
         assert_eq!(set.len(), 2);
     }
+
+    // ── schema_to_field_type: oneOf / anyOf composition ─────────
+
+    #[test]
+    fn one_of_with_ref_is_any() {
+        // oneOf without allOf ref pattern falls through to Any
+        let s = Schema {
+            one_of: vec![
+                Schema {
+                    ref_path: Some("#/components/schemas/Cat".to_string()),
+                    ..Default::default()
+                },
+                Schema {
+                    ref_path: Some("#/components/schemas/Dog".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        // oneOf doesn't have special handling, falls to default branch
+        assert_eq!(schema_to_field_type(&s), FieldType::Any);
+    }
+
+    #[test]
+    fn any_of_without_type_is_any() {
+        let s = Schema {
+            any_of: vec![
+                Schema {
+                    schema_type: Some("string".to_string()),
+                    ..Default::default()
+                },
+                Schema {
+                    schema_type: Some("integer".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(schema_to_field_type(&s), FieldType::Any);
+    }
+
+    // ── schema_to_field_type: allOf with non-ref first ──────────
+
+    #[test]
+    fn all_of_ref_not_first_finds_it() {
+        let s = Schema {
+            all_of: vec![
+                Schema {
+                    schema_type: Some("object".to_string()),
+                    ..Default::default()
+                },
+                Schema {
+                    ref_path: Some("#/components/schemas/Mixin".to_string()),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Object("Mixin".to_string())
+        );
+    }
+
+    // ── schema_to_field_type: enum on non-string type ───────────
+
+    #[test]
+    fn enum_on_integer_with_string_values() {
+        let s = Schema {
+            schema_type: Some("integer".to_string()),
+            enum_values: Some(vec![
+                serde_json::Value::String("1".to_string()),
+                serde_json::Value::String("2".to_string()),
+            ]),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Enum {
+                values: vec!["1".to_string(), "2".to_string()],
+                underlying: Box::new(FieldType::Integer),
+            }
+        );
+    }
+
+    #[test]
+    fn enum_with_mixed_values_filters_non_strings() {
+        let s = Schema {
+            schema_type: Some("string".to_string()),
+            enum_values: Some(vec![
+                serde_json::Value::String("valid".to_string()),
+                serde_json::Value::Number(42.into()),
+                serde_json::Value::Null,
+                serde_json::Value::String("also_valid".to_string()),
+            ]),
+            ..Default::default()
+        };
+        match schema_to_field_type(&s) {
+            FieldType::Enum {
+                values, underlying, ..
+            } => {
+                assert_eq!(values, vec!["valid", "also_valid"]);
+                assert_eq!(*underlying, FieldType::String);
+            }
+            other => panic!("expected Enum, got: {other:?}"),
+        }
+    }
+
+    // ── nested type conversions ─────────────────────────────────
+
+    #[test]
+    fn array_of_array_of_objects() {
+        let s = Schema {
+            schema_type: Some("array".to_string()),
+            items: Some(Box::new(Schema {
+                schema_type: Some("array".to_string()),
+                items: Some(Box::new(Schema {
+                    ref_path: Some("#/components/schemas/Cell".to_string()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let ft = schema_to_field_type(&s);
+        assert_eq!(
+            ft,
+            FieldType::Array(Box::new(FieldType::Array(Box::new(FieldType::Object(
+                "Cell".to_string()
+            )))))
+        );
+        assert_eq!(ft.depth(), 2);
+    }
+
+    #[test]
+    fn map_of_arrays() {
+        let s = Schema {
+            schema_type: Some("object".to_string()),
+            additional_properties: Some(Box::new(Schema {
+                schema_type: Some("array".to_string()),
+                items: Some(Box::new(Schema {
+                    schema_type: Some("string".to_string()),
+                    ..Default::default()
+                })),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Map(Box::new(FieldType::Array(Box::new(FieldType::String))))
+        );
+    }
+
+    // ── From<&Schema> trait with complex types ──────────────────
+
+    #[test]
+    fn from_schema_array_of_refs() {
+        let s = Schema {
+            schema_type: Some("array".to_string()),
+            items: Some(Box::new(Schema {
+                ref_path: Some("#/components/schemas/Item".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        let ft: FieldType = (&s).into();
+        assert_eq!(
+            ft,
+            FieldType::Array(Box::new(FieldType::Object("Item".to_string())))
+        );
+    }
+
+    #[test]
+    fn from_schema_enum() {
+        let s = Schema {
+            schema_type: Some("string".to_string()),
+            enum_values: Some(vec![
+                serde_json::Value::String("x".to_string()),
+                serde_json::Value::String("y".to_string()),
+            ]),
+            ..Default::default()
+        };
+        let ft = FieldType::from(&s);
+        assert!(ft.is_enum());
+        assert_eq!(ft.enum_values().unwrap(), &["x", "y"]);
+    }
+
+    // ── TypeMapper trait with complex schemas ────────────────────
+
+    #[test]
+    fn default_type_mapper_maps_array_schema() {
+        let mapper = DefaultTypeMapper;
+        let s = Schema {
+            schema_type: Some("array".to_string()),
+            items: Some(Box::new(Schema {
+                schema_type: Some("boolean".to_string()),
+                ..Default::default()
+            })),
+            ..Default::default()
+        };
+        assert_eq!(
+            mapper.map_schema(&s),
+            FieldType::Array(Box::new(FieldType::Boolean))
+        );
+    }
+
+    #[test]
+    fn default_type_mapper_maps_ref_schema() {
+        let mapper = DefaultTypeMapper;
+        let s = Schema {
+            ref_path: Some("#/components/schemas/Widget".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            mapper.map_schema(&s),
+            FieldType::Object("Widget".to_string())
+        );
+    }
+
+    // ── FieldType depth edge cases ──────────────────────────────
+
+    #[test]
+    fn field_type_depth_map() {
+        assert_eq!(FieldType::Map(Box::new(FieldType::String)).depth(), 1);
+    }
+
+    #[test]
+    fn field_type_depth_deeply_nested() {
+        let ft = FieldType::Array(Box::new(FieldType::Array(Box::new(FieldType::Map(
+            Box::new(FieldType::Integer),
+        )))));
+        assert_eq!(ft.depth(), 3);
+    }
+
+    #[test]
+    fn field_type_depth_enum_with_underlying_array() {
+        let e = FieldType::Enum {
+            values: vec!["a".to_string()],
+            underlying: Box::new(FieldType::Array(Box::new(FieldType::String))),
+        };
+        // Enum depth delegates to underlying
+        assert_eq!(e.depth(), 1);
+    }
+
+    // ── Serde roundtrip for complex nested types ────────────────
+
+    #[test]
+    fn serde_roundtrip_enum_with_underlying_integer() {
+        let ft = FieldType::Enum {
+            values: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            underlying: Box::new(FieldType::Integer),
+        };
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    #[test]
+    fn serde_roundtrip_deeply_nested() {
+        let ft = FieldType::Map(Box::new(FieldType::Array(Box::new(
+            FieldType::Map(Box::new(FieldType::Object("Deep".to_string()))),
+        ))));
+        let json = serde_json::to_string(&ft).unwrap();
+        let back: FieldType = serde_json::from_str(&json).unwrap();
+        assert_eq!(ft, back);
+    }
+
+    // ── FromStr edge cases ──────────────────────────────────────
+
+    #[test]
+    fn field_type_from_str_empty_string_is_object() {
+        let ft: FieldType = "".parse().unwrap();
+        assert_eq!(ft, FieldType::Object(String::new()));
+    }
+
+    #[test]
+    fn field_type_from_str_case_sensitive() {
+        // "string" (lowercase) is not "String", so it becomes Object
+        let ft: FieldType = "string".parse().unwrap();
+        assert_eq!(ft, FieldType::Object("string".to_string()));
+    }
+
+    // ── TypeMapper map_override edge cases ───────────────────────
+
+    #[test]
+    fn default_type_mapper_override_all_aliases() {
+        let mapper = DefaultTypeMapper;
+        // Verify all documented aliases
+        let bool_aliases = ["bool", "boolean"];
+        for alias in &bool_aliases {
+            assert_eq!(
+                mapper.map_override(alias),
+                Some(FieldType::Boolean),
+                "alias '{alias}' should map to Boolean"
+            );
+        }
+        let int_aliases = ["int", "int64", "integer"];
+        for alias in &int_aliases {
+            assert_eq!(
+                mapper.map_override(alias),
+                Some(FieldType::Integer),
+                "alias '{alias}' should map to Integer"
+            );
+        }
+        let num_aliases = ["float", "float64", "number"];
+        for alias in &num_aliases {
+            assert_eq!(
+                mapper.map_override(alias),
+                Some(FieldType::Number),
+                "alias '{alias}' should map to Number"
+            );
+        }
+    }
 }

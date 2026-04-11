@@ -1520,4 +1520,534 @@ paths: {}
         assert_eq!(optional.len(), 1);
         assert!(optional.iter().all(|f| !f.required));
     }
+
+    // ── Header and cookie parameter resolution ─────────────────
+
+    #[test]
+    fn resolve_header_parameter() {
+        let yaml = r#"
+info:
+  title: HeaderParam Test
+  version: "1.0"
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - name: X-Request-ID
+          in: header
+          required: true
+          description: Unique request identifier
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        let op = &resolved.operations[0];
+        assert_eq!(op.parameters.len(), 1);
+        assert_eq!(op.parameters[0].name, "X-Request-ID");
+        assert_eq!(op.parameters[0].location, "header");
+        assert!(op.parameters[0].required);
+        assert_eq!(op.parameters[0].field_type, FieldType::String);
+        assert_eq!(
+            op.parameters[0].description.as_deref(),
+            Some("Unique request identifier")
+        );
+    }
+
+    #[test]
+    fn resolve_cookie_parameter() {
+        let yaml = r#"
+info:
+  title: CookieParam Test
+  version: "1.0"
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - name: session_id
+          in: cookie
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        let op = &resolved.operations[0];
+        assert_eq!(op.parameters[0].name, "session_id");
+        assert_eq!(op.parameters[0].location, "cookie");
+        assert!(!op.parameters[0].required);
+    }
+
+    #[test]
+    fn resolve_all_parameter_locations() {
+        let yaml = r#"
+info:
+  title: AllLocations Test
+  version: "1.0"
+paths:
+  /items/{id}:
+    get:
+      operationId: getItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: tracking
+          in: cookie
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        let op = &resolved.operations[0];
+        assert_eq!(op.parameters.len(), 4);
+
+        let path_params: Vec<_> = op.params_by_location("path").collect();
+        assert_eq!(path_params.len(), 1);
+        assert_eq!(path_params[0].name, "id");
+
+        let query_params: Vec<_> = op.params_by_location("query").collect();
+        assert_eq!(query_params.len(), 1);
+        assert_eq!(query_params[0].name, "fields");
+
+        let header_params: Vec<_> = op.params_by_location("header").collect();
+        assert_eq!(header_params.len(), 1);
+        assert_eq!(header_params[0].name, "Authorization");
+
+        let cookie_params: Vec<_> = op.params_by_location("cookie").collect();
+        assert_eq!(cookie_params.len(), 1);
+        assert_eq!(cookie_params[0].name, "tracking");
+    }
+
+    // ── operations_by_method with nonexistent method ────────────
+
+    #[test]
+    fn operations_by_method_nonexistent_returns_empty() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let options: Vec<_> = resolved.operations_by_method("options").collect();
+        assert!(options.is_empty());
+        let patch: Vec<_> = resolved.operations_by_method("patch").collect();
+        assert!(patch.is_empty());
+    }
+
+    // ── Schema with nested object ref fields ────────────────────
+
+    #[test]
+    fn resolve_schema_with_nested_ref_fields() {
+        let yaml = r##"
+info:
+  title: NestedRef Test
+  version: "1.0"
+paths: {}
+components:
+  schemas:
+    Order:
+      type: object
+      required:
+        - id
+        - customer
+      properties:
+        id:
+          type: integer
+        customer:
+          $ref: "#/components/schemas/Customer"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+    Customer:
+      type: object
+      properties:
+        name:
+          type: string
+    OrderItem:
+      type: object
+      properties:
+        product:
+          type: string
+        quantity:
+          type: integer
+"##;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        assert_eq!(resolved.schemas.len(), 3);
+
+        let order = resolved.find_schema("Order").unwrap();
+        let customer_field = order.fields.iter().find(|f| f.name == "customer").unwrap();
+        assert_eq!(
+            customer_field.field_type,
+            FieldType::Object("Customer".to_string())
+        );
+        assert!(customer_field.required);
+
+        let items_field = order.fields.iter().find(|f| f.name == "items").unwrap();
+        assert_eq!(
+            items_field.field_type,
+            FieldType::Array(Box::new(FieldType::Object("OrderItem".to_string())))
+        );
+        assert!(!items_field.required);
+    }
+
+    // ── ResolvedSpec serde with empty spec ───────────────────────
+
+    #[test]
+    fn resolved_spec_serde_roundtrip_empty() {
+        let yaml = r#"
+info:
+  title: Empty
+  version: "1.0"
+paths: {}
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        assert!(resolved.is_empty());
+        let json = serde_json::to_string(&resolved).unwrap();
+        let back: ResolvedSpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(resolved, back);
+        assert!(back.is_empty());
+    }
+
+    // ── Integration: resolve + group_crud end-to-end ────────────
+
+    #[test]
+    fn resolve_then_group_crud_end_to_end() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let groups = crate::group_crud(&resolved.operations);
+        assert_eq!(groups.len(), 1);
+        let g = &groups[0];
+        assert_eq!(g.name, "pets");
+        assert!(g.list.is_some());
+        assert!(g.create.is_some());
+        assert!(g.read.is_some());
+        assert!(g.delete.is_some());
+        // No PUT/PATCH in pet store, so update is None
+        assert!(g.update.is_none());
+        assert_eq!(g.operation_count(), 4);
+    }
+
+    #[test]
+    fn resolve_then_group_crud_full_api() {
+        let yaml = r##"
+info:
+  title: Full API
+  version: "1.0"
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Widget"
+    post:
+      operationId: createWidget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWidget"
+      responses:
+        "201":
+          description: Created
+  /widgets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getWidget
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Widget"
+    put:
+      operationId: updateWidget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWidget"
+      responses:
+        "200":
+          description: Updated
+    delete:
+      operationId: deleteWidget
+      responses:
+        "204":
+          description: Deleted
+components:
+  schemas:
+    Widget:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+          enum:
+            - red
+            - blue
+            - green
+    CreateWidget:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+"##;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        assert_eq!(resolved.operations.len(), 5);
+        assert_eq!(resolved.schemas.len(), 2);
+
+        let groups = crate::group_crud(&resolved.operations);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].is_complete());
+        assert_eq!(groups[0].name, "widgets");
+
+        // Verify resolved types flowed correctly
+        let list_op = resolved.find_operation("listWidgets").unwrap();
+        assert_eq!(
+            list_op.response_type,
+            Some(FieldType::Array(Box::new(FieldType::Object(
+                "Widget".to_string()
+            ))))
+        );
+
+        let create_op = resolved.find_operation("createWidget").unwrap();
+        assert!(create_op.has_body());
+        assert_eq!(
+            create_op.request_body.as_ref().unwrap().field_type,
+            FieldType::Object("CreateWidget".to_string())
+        );
+
+        // Verify enum field resolution
+        let widget = resolved.find_schema("Widget").unwrap();
+        let color_field = widget.fields.iter().find(|f| f.name == "color").unwrap();
+        assert!(color_field.field_type.is_enum());
+        assert_eq!(
+            color_field.field_type.enum_values().unwrap(),
+            &["red", "blue", "green"]
+        );
+    }
+
+    // ── Schema with map field ───────────────────────────────────
+
+    #[test]
+    fn resolve_schema_with_map_field() {
+        let yaml = r#"
+info:
+  title: MapField Test
+  version: "1.0"
+paths: {}
+components:
+  schemas:
+    Config:
+      type: object
+      properties:
+        settings:
+          type: object
+          additionalProperties:
+            type: string
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        let config = resolved.find_schema("Config").unwrap();
+        let settings = config.fields.iter().find(|f| f.name == "settings").unwrap();
+        assert_eq!(
+            settings.field_type,
+            FieldType::Map(Box::new(FieldType::String))
+        );
+    }
+
+    // ── ResolvedOp params_by_location with no matches ───────────
+
+    #[test]
+    fn params_by_location_no_matches() {
+        let spec = load_pet_store();
+        let resolved = resolve(&spec);
+        let list = resolved.find_operation("listPets").unwrap();
+        let header_params: Vec<_> = list.params_by_location("header").collect();
+        assert!(header_params.is_empty());
+    }
+
+    // ── ResolvedSpec not empty with only schemas ────────────────
+
+    #[test]
+    fn resolved_spec_not_empty_with_only_schemas() {
+        let yaml = r#"
+info:
+  title: SchemasOnly
+  version: "1.0"
+paths: {}
+components:
+  schemas:
+    Foo:
+      type: object
+      properties:
+        bar:
+          type: string
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        assert!(!resolved.is_empty());
+        assert!(resolved.operations.is_empty());
+        assert_eq!(resolved.schemas.len(), 1);
+    }
+
+    // ── ResolvedSpec not empty with only operations ─────────────
+
+    #[test]
+    fn resolved_spec_not_empty_with_only_operations() {
+        let yaml = r#"
+info:
+  title: OpsOnly
+  version: "1.0"
+paths:
+  /ping:
+    get:
+      operationId: ping
+      responses:
+        "200":
+          description: OK
+"#;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        assert!(!resolved.is_empty());
+        assert_eq!(resolved.operations.len(), 1);
+        assert!(resolved.schemas.is_empty());
+    }
+
+    // ── Serde roundtrip for complex resolved spec ───────────────
+
+    #[test]
+    fn resolved_spec_serde_roundtrip_complex() {
+        let yaml = r##"
+info:
+  title: Complex Serde
+  version: "1.0"
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Max items
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Item"
+    post:
+      operationId: createItem
+      requestBody:
+        required: true
+        description: Item to create
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Created
+components:
+  schemas:
+    Item:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          description: Unique ID
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+"##;
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
+        let resolved = resolve(&spec);
+        let json = serde_json::to_string_pretty(&resolved).unwrap();
+        let back: ResolvedSpec = serde_json::from_str(&json).unwrap();
+        assert_eq!(resolved, back);
+
+        // Verify structure survived roundtrip
+        let item = back.find_schema("Item").unwrap();
+        assert_eq!(item.fields.len(), 4);
+
+        let tags_field = item.fields.iter().find(|f| f.name == "tags").unwrap();
+        assert_eq!(
+            tags_field.field_type,
+            FieldType::Array(Box::new(FieldType::String))
+        );
+
+        let meta_field = item.fields.iter().find(|f| f.name == "metadata").unwrap();
+        assert_eq!(
+            meta_field.field_type,
+            FieldType::Map(Box::new(FieldType::String))
+        );
+    }
 }
