@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "workspace": {
     "root": "/Users/drzzln/code/github/pleme-io/takumi",
     "members": [
@@ -26,6 +26,11 @@
       ],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "anyhow",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -44,6 +49,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "equivalent",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -62,6 +72,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "hashbrown",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -84,6 +99,11 @@
       ],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "indexmap",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "equivalent",
@@ -158,6 +178,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "itoa",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -179,6 +204,11 @@
       ],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "memchr",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -199,6 +229,11 @@
       ],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "proc_macro2",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "unicode_ident",
@@ -246,6 +281,11 @@
       ],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "quote",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "proc_macro2",
@@ -291,6 +331,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "ryu",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -304,11 +349,16 @@
         "kind": "git",
         "url": "https://github.com/pleme-io/sekkei",
         "rev": "7902f1c5b2f9c82469e87fd6e87aeae82e16e2f6",
-        "sha256": null
+        "sha256": "0n1v00rds8gdmhizxhalycab3n0fihdk4g14f42qyf7d9vcc62ri"
       },
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "sekkei",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "anyhow",
@@ -410,6 +460,11 @@
       ],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "serde",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "serde_core",
@@ -473,6 +528,11 @@
       ],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "serde_core",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -493,6 +553,11 @@
       ],
       "proc_macro": true,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "serde_derive",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "proc_macro2",
@@ -593,6 +658,11 @@
       ],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "serde_json",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "itoa",
@@ -685,6 +755,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "serde_yaml_ng",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "indexmap",
@@ -808,6 +883,11 @@
       ],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "syn",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "proc_macro2",
@@ -893,6 +973,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "takumi",
+        "path": "src/lib.rs"
+      },
       "dependencies": [
         {
           "name": "indexmap",
@@ -993,6 +1078,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [],
+      "lib_target": {
+        "name": "unicode_ident",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -1011,6 +1101,20 @@
       "features": [],
       "proc_macro": false,
       "build_script": null,
+      "binaries": [
+        {
+          "name": "run-emitter-test-suite",
+          "path": "src/bin/run-emitter-test-suite.rs"
+        },
+        {
+          "name": "run-parser-test-suite",
+          "path": "src/bin/run-parser-test-suite.rs"
+        }
+      ],
+      "lib_target": {
+        "name": "unsafe_libyaml",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -1029,6 +1133,11 @@
       "features": [],
       "proc_macro": false,
       "build_script": "build.rs",
+      "binaries": [],
+      "lib_target": {
+        "name": "zmij",
+        "path": "src/lib.rs"
+      },
       "dependencies": [],
       "runtime_dependencies": [],
       "build_dependencies": [],
@@ -1038,5 +1147,11 @@
   "root_crate": "takumi-0.1.0",
   "workspace_members": [
     "takumi-0.1.0"
-  ]
+  ],
+  "flake_metadata": {
+    "takumi": {
+      "default_bin": null,
+      "repo": "pleme-io/takumi"
+    }
+  }
 }
