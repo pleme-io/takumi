@@ -1,16 +1,8 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "1190ac151120325ca357aa7826b5a386af2a05ef015fe4061e6004e5b08f960f",
+  "cargo_lock_sha256": "7720a9094cedc9b066303c6d3aa166df862d6e01f7568918fb768ba9e9abba3f",
   "target_resolves": {
     "base": {
-      "anyhow-1.0.102": {
-        "runtime_dependencies": [],
-        "build_dependencies": [],
-        "features": [
-          "default",
-          "std"
-        ]
-      },
       "equivalent-1.0.2": {
         "runtime_dependencies": [],
         "build_dependencies": [],
@@ -89,6 +81,7 @@
         ],
         "build_dependencies": [],
         "features": [
+          "default",
           "proc-macro"
         ]
       },
@@ -107,6 +100,7 @@
         ],
         "build_dependencies": [],
         "features": [
+          "default",
           "proc-macro"
         ]
       },
@@ -115,18 +109,8 @@
         "build_dependencies": [],
         "features": []
       },
-      "sekkei-0.1.0": {
+      "sekkei-0.1.1": {
         "runtime_dependencies": [
-          {
-            "name": "anyhow",
-            "package_key": "anyhow-1.0.102",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
           {
             "name": "serde",
             "package_key": "serde-1.0.228",
@@ -152,6 +136,16 @@
           {
             "name": "serde_yaml_ng",
             "package_key": "serde_yaml_ng-0.10.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "thiserror",
+            "package_key": "thiserror-2.0.18",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -391,6 +385,7 @@
         "build_dependencies": [],
         "features": [
           "clone-impls",
+          "default",
           "derive",
           "parsing",
           "printing",
@@ -413,7 +408,7 @@
           },
           {
             "name": "sekkei",
-            "package_key": "sekkei-0.1.0",
+            "package_key": "sekkei-0.1.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -436,6 +431,61 @@
           {
             "name": "serde_json",
             "package_key": "serde_json-1.0.149",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
+      "thiserror-2.0.18": {
+        "runtime_dependencies": [
+          {
+            "name": "thiserror_impl",
+            "package_key": "thiserror-impl-2.0.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "host"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "default",
+          "std"
+        ]
+      },
+      "thiserror-impl-2.0.18": {
+        "runtime_dependencies": [
+          {
+            "name": "proc_macro2",
+            "package_key": "proc-macro2-1.0.106",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "quote",
+            "package_key": "quote-1.0.45",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "syn",
+            "package_key": "syn-2.0.117",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -485,10 +535,6 @@
     }
   },
   "per_crate": {
-    "anyhow-1.0.102": {
-      "edition": "2021",
-      "build_script": "build.rs"
-    },
     "equivalent-1.0.2": {
       "edition": "2015"
     },
@@ -515,7 +561,7 @@
     "ryu-1.0.23": {
       "edition": "2021"
     },
-    "sekkei-0.1.0": {
+    "sekkei-0.1.1": {
       "edition": "2024"
     },
     "serde-1.0.228": {
@@ -547,6 +593,14 @@
         "path": "src/lib.rs"
       }
     },
+    "thiserror-2.0.18": {
+      "edition": "2021",
+      "build_script": "build.rs"
+    },
+    "thiserror-impl-2.0.18": {
+      "edition": "2021",
+      "proc_macro": true
+    },
     "unicode-ident-1.0.24": {
       "edition": "2021"
     },
@@ -569,7 +623,7 @@
     }
   },
   "git_nar_sha256": {
-    "sekkei-0.1.0": "sha256-MQvD2E7tOI8FcSQ8MhuMDtixFPNUwf4jrO0h3TIAO1g="
+    "sekkei-0.1.1": "sha256-QKIS+nHcesEYSNUbwdnMXG+6sYQxxV2iWQJFNxEFXKg="
   },
   "flake_metadata": {}
 }

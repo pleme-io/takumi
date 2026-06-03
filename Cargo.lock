@@ -3,12 +3,6 @@
 version = 4
 
 [[package]]
-name = "anyhow"
-version = "1.0.102"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -70,13 +64,13 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sekkei"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/sekkei#7902f1c5b2f9c82469e87fd6e87aeae82e16e2f6"
+version = "0.1.1"
+source = "git+https://github.com/pleme-io/sekkei#4e969b085bd8e55811edf317b449cd965c66ee88"
 dependencies = [
- "anyhow",
  "serde",
  "serde_json",
  "serde_yaml_ng",
+ "thiserror",
 ]
 
 [[package]]
@@ -155,6 +149,26 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml_ng",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
