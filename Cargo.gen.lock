@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "7720a9094cedc9b066303c6d3aa166df862d6e01f7568918fb768ba9e9abba3f",
+  "cargo_lock_sha256": "2c9fe24ca37bdda925fb81c2adcf1951a5560a6ecdde355e75089a85b2466b0a",
   "target_resolves": {
     "base": {
       "equivalent-1.0.2": {
@@ -8,12 +8,12 @@
         "build_dependencies": [],
         "features": []
       },
-      "hashbrown-0.16.1": {
+      "hashbrown-0.17.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
       },
-      "indexmap-2.13.0": {
+      "indexmap-2.14.0": {
         "runtime_dependencies": [
           {
             "name": "equivalent",
@@ -27,7 +27,7 @@
           },
           {
             "name": "hashbrown",
-            "package_key": "hashbrown-0.16.1",
+            "package_key": "hashbrown-0.17.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -53,12 +53,12 @@
           "std"
         ]
       },
-      "itoa-1.0.17": {
+      "itoa-1.0.18": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
       },
-      "memchr-2.8.0": {
+      "memchr-2.8.2": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
@@ -109,7 +109,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "sekkei-0.1.1-4e969b085bd8e55811edf317b449cd965c66ee88": {
+      "sekkei-0.1.1-e904a701e747dd175da73fd5d5737265a8f049ad": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -125,7 +125,7 @@
           },
           {
             "name": "serde_json",
-            "package_key": "serde_json-1.0.149",
+            "package_key": "serde_json-1.0.150",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -244,11 +244,11 @@
           "default"
         ]
       },
-      "serde_json-1.0.149": {
+      "serde_json-1.0.150": {
         "runtime_dependencies": [
           {
             "name": "itoa",
-            "package_key": "itoa-1.0.17",
+            "package_key": "itoa-1.0.18",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -258,7 +258,7 @@
           },
           {
             "name": "memchr",
-            "package_key": "memchr-2.8.0",
+            "package_key": "memchr-2.8.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -297,7 +297,7 @@
         "runtime_dependencies": [
           {
             "name": "indexmap",
-            "package_key": "indexmap-2.13.0",
+            "package_key": "indexmap-2.14.0",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -307,7 +307,7 @@
           },
           {
             "name": "itoa",
-            "package_key": "itoa-1.0.17",
+            "package_key": "itoa-1.0.18",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -392,11 +392,11 @@
           "proc-macro"
         ]
       },
-      "takumi-0.1.0": {
+      "takumi-0.1.1": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
-            "package_key": "indexmap-2.13.0",
+            "package_key": "indexmap-2.14.0",
             "kind": "normal",
             "features": [
               "serde"
@@ -408,7 +408,7 @@
           },
           {
             "name": "sekkei",
-            "package_key": "sekkei-0.1.1-4e969b085bd8e55811edf317b449cd965c66ee88",
+            "package_key": "sekkei-0.1.1-e904a701e747dd175da73fd5d5737265a8f049ad",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -430,7 +430,7 @@
           },
           {
             "name": "serde_json",
-            "package_key": "serde_json-1.0.149",
+            "package_key": "serde_json-1.0.150",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -538,16 +538,16 @@
     "equivalent-1.0.2": {
       "edition": "2015"
     },
-    "hashbrown-0.16.1": {
+    "hashbrown-0.17.1": {
+      "edition": "2024"
+    },
+    "indexmap-2.14.0": {
+      "edition": "2024"
+    },
+    "itoa-1.0.18": {
       "edition": "2021"
     },
-    "indexmap-2.13.0": {
-      "edition": "2021"
-    },
-    "itoa-1.0.17": {
-      "edition": "2021"
-    },
-    "memchr-2.8.0": {
+    "memchr-2.8.2": {
       "edition": "2021"
     },
     "proc-macro2-1.0.106": {
@@ -561,7 +561,7 @@
     "ryu-1.0.23": {
       "edition": "2021"
     },
-    "sekkei-0.1.1-4e969b085bd8e55811edf317b449cd965c66ee88": {
+    "sekkei-0.1.1-e904a701e747dd175da73fd5d5737265a8f049ad": {
       "edition": "2024"
     },
     "serde-1.0.228": {
@@ -576,7 +576,7 @@
       "edition": "2021",
       "proc_macro": true
     },
-    "serde_json-1.0.149": {
+    "serde_json-1.0.150": {
       "edition": "2021",
       "build_script": "build.rs"
     },
@@ -586,7 +586,7 @@
     "syn-2.0.117": {
       "edition": "2021"
     },
-    "takumi-0.1.0": {
+    "takumi-0.1.1": {
       "edition": "2024",
       "lib_target": {
         "name": "takumi",
@@ -623,7 +623,7 @@
     }
   },
   "git_nar_sha256": {
-    "sekkei-0.1.1-4e969b085bd8e55811edf317b449cd965c66ee88": "sha256-QKIS+nHcesEYSNUbwdnMXG+6sYQxxV2iWQJFNxEFXKg="
+    "sekkei-0.1.1-e904a701e747dd175da73fd5d5737265a8f049ad": "sha256-d6/RtiU8X2jLG+b7AhzLXuaLUGM2JxXIs3edumQyPoI="
   },
   "flake_metadata": {}
 }
