@@ -1,5 +1,5 @@
 [package]
-name = "takumi"
+name = "pleme-io-takumi"
 version = "0.1.1"
 edition = "2024"
 rust-version = "1.89.0"
@@ -16,7 +16,7 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
 [dependencies]
-sekkei = { git = "https://github.com/pleme-io/sekkei" , version = "0.1" }
+sekkei = "0.1"
 indexmap = { version = "2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
