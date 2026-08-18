@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "5973834b96ffa9a94b5924360b199084ce65c1589bd8b830dbc2582b8094616e",
+  "cargo_lock_sha256": "b72760c9135f7cbc039afe116a85dc6e9a1a2de14e79f8c5246541bdf1763d0d",
   "manifest_sha256": {
-    "Cargo.toml": "2b6dfa846570fd6a6c250018865ac7dd03388e48c48e1b258d056ae625c874f7"
+    "Cargo.toml": "2e2f25240143dbe39d7870062e6aa6dae847e6779af37eb0b38acdb2e96bd026"
   },
   "target_resolves": {
     "base": {
@@ -69,7 +69,7 @@
           "std"
         ]
       },
-      "pleme-io-takumi-0.1.3": {
+      "pleme-io-takumi-0.1.4": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -555,7 +555,7 @@
     "memchr-2.8.3": {
       "edition": "2021"
     },
-    "pleme-io-takumi-0.1.3": {
+    "pleme-io-takumi-0.1.4": {
       "edition": "2024",
       "lib_target": {
         "name": "pleme_io_takumi",
