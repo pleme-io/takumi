@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "10c36368886d1f5cdb57fe0d4f6a70c02ab089a885e94b769d9c99d28e5ea36b",
+  "cargo_lock_sha256": "5973834b96ffa9a94b5924360b199084ce65c1589bd8b830dbc2582b8094616e",
   "manifest_sha256": {
-    "Cargo.toml": "2a47126786e82df445c13e80fc119cd485379bb57f8f22896e129ce089faefb6"
+    "Cargo.toml": "2b6dfa846570fd6a6c250018865ac7dd03388e48c48e1b258d056ae625c874f7"
   },
   "target_resolves": {
     "base": {
@@ -69,7 +69,7 @@
           "std"
         ]
       },
-      "pleme-io-takumi-0.1.2": {
+      "pleme-io-takumi-0.1.3": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -198,7 +198,7 @@
           },
           {
             "name": "thiserror",
-            "package_key": "thiserror-2.0.19",
+            "package_key": "thiserror-2.0.20",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -447,11 +447,11 @@
           "proc-macro"
         ]
       },
-      "thiserror-2.0.19": {
+      "thiserror-2.0.20": {
         "runtime_dependencies": [
           {
             "name": "thiserror_impl",
-            "package_key": "thiserror-impl-2.0.19",
+            "package_key": "thiserror-impl-2.0.20",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -466,7 +466,7 @@
           "std"
         ]
       },
-      "thiserror-impl-2.0.19": {
+      "thiserror-impl-2.0.20": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -555,7 +555,7 @@
     "memchr-2.8.3": {
       "edition": "2021"
     },
-    "pleme-io-takumi-0.1.2": {
+    "pleme-io-takumi-0.1.3": {
       "edition": "2024",
       "lib_target": {
         "name": "pleme_io_takumi",
@@ -598,11 +598,11 @@
     "syn-3.0.3": {
       "edition": "2021"
     },
-    "thiserror-2.0.19": {
+    "thiserror-2.0.20": {
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "thiserror-impl-2.0.19": {
+    "thiserror-impl-2.0.20": {
       "edition": "2021",
       "proc_macro": true
     },
