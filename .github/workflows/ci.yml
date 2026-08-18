@@ -1,0 +1,43 @@
+name: ci
+
+# Thin shim onto substrate's cargo-ci.yml.
+#
+# WHY THIS EXISTS: before this file, `cargo test` ran in CI for exactly one
+# repo in this family (iac-forge, which hand-rolled its own after discovering
+# the reusable was vacuous). The rest carried auto-release.yml and
+# gen-spec.yml only -- so their tests gated nothing, and a change that broke
+# the build could land green.
+#
+# It is cargo-ci.yml and not cargo-gate-ci.yml because this repo has a
+# flake.nix, so `nix flake check` is available as a real compile gate.
+#
+# BOTH LEGS WERE VERIFIED ON THIS REPO BEFORE WIRING, not assumed:
+#   * `checks.<sys>` evaluates to {build, gen-confirm}, and injecting a
+#     `compile_error!` into the crate turns `checks.build` red -- so the
+#     compile leg is non-vacuous. On the previous substrate pin `checks` was
+#     {gen-confirm} alone: a lockfile-freshness gate that never compiled
+#     anything, which is how `nix flake check` could return exit 0 over a
+#     crate with a deliberately broken test module.
+#   * `devShells.<sys>.default.name` is `nix-shell`, so substrate's
+#     devshell-preflight passes and `cargo test` actually executes. On the
+#     previous pin it was `devenv-shell`, which `nix develop` cannot enter
+#     non-interactively -- substrate's own header records that leg running
+#     the tests of 0 of its 3 consumers for exactly this reason.
+#
+# Both fixes came from ONE change: re-locking the substrate input. If you roll
+# that input back, re-check both facts above before trusting this file.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: pleme-io/substrate/.github/workflows/cargo-ci.yml@main
+    secrets: inherit
