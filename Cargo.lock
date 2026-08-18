@@ -75,9 +75,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sekkei"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c292eaa6530dcd2f082f7812cb50bbddc9248a4f1dfb43b6d8c28653ecffd414"
+checksum = "05661981645c3ad0ba42ad1582e60246c37abf38a14f1eec09aecf8e224c4556"
 dependencies = [
  "serde",
  "serde_json",
