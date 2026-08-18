@@ -124,6 +124,20 @@ pub enum FieldType {
         values: Vec<EnumValue>,
         underlying: Box<FieldType>,
     },
+    /// JSON `null` is the only inhabitant of this position.
+    ///
+    /// Distinct from `Nullable`: this is a value that is *always* null, which is
+    /// how a spec spells "the presence of this key is the whole signal". Four
+    /// such properties exist in Discord's spec, one of them `required`.
+    Null,
+    /// `T`, widened to admit JSON `null` here.
+    ///
+    /// Nullability lives inside the type rather than beside it on a field
+    /// record, because it composes at container boundaries: an array whose
+    /// items are nullable and which is itself nullable is `Option<Vec<Option<T>>>`,
+    /// and a single `nullable: bool` on the field can encode only one of those
+    /// two levels while silently losing the other.
+    Nullable(Box<FieldType>),
     Any,
 }
 
@@ -142,6 +156,8 @@ impl fmt::Display for FieldType {
                     values.iter().map(ToString::to_string).collect();
                 write!(f, "Enum({})", rendered.join("|"))
             }
+            Self::Null => f.write_str("Null"),
+            Self::Nullable(inner) => write!(f, "Nullable<{inner}>"),
             Self::Any => f.write_str("Any"),
         }
     }
@@ -174,12 +190,136 @@ impl From<&Schema> for FieldType {
     }
 }
 
+/// Resolves `$ref` pointers against a spec while refusing to loop.
+///
+/// Two things this deliberately is not. It is not single-hop: sekkei's own
+/// `resolve_schema_ref` is one dictionary lookup, so a chain `Alias -> Real`
+/// stops at `Alias` and a caller reading its (empty) properties sees a phantom
+/// type with no error anywhere.
+///
+/// And the loop guard is a resolution STACK, not a global seen-set. That
+/// distinction is the whole correctness of it: a schema graph is a DAG with
+/// heavy sharing — Discord re-enters `ActionRowComponentResponse` from five
+/// distinct parents — so a set that never forgets would treat the second,
+/// legitimate visit as a cycle and yield the same phantom the multi-hop fix
+/// exists to remove. Only a *path* revisit is a cycle.
+pub struct RefResolver<'a> {
+    spec: &'a sekkei::OpenApiSpec,
+    stack: Vec<std::string::String>,
+}
+
+impl<'a> RefResolver<'a> {
+    #[must_use]
+    pub fn new(spec: &'a sekkei::OpenApiSpec) -> Self {
+        Self {
+            spec,
+            stack: Vec::new(),
+        }
+    }
+
+    /// The spec being resolved against.
+    #[must_use]
+    pub fn spec(&self) -> &'a sekkei::OpenApiSpec {
+        self.spec
+    }
+
+    /// Follow a `$ref` chain to the first schema that is not itself a bare
+    /// `$ref`, returning that schema **and the pointer that names it**.
+    ///
+    /// The pointer is returned alongside because the terminal target's own name
+    /// is what a generator must emit — naming the alias instead produces a type
+    /// whose properties are empty, which is the phantom this resolver exists to
+    /// prevent. `None` when the pointer dangles, or when following it would
+    /// re-enter a schema already on the current resolution path.
+    #[must_use]
+    pub fn resolve_named(&mut self, ref_path: &str) -> Option<(&'a Schema, std::string::String)> {
+        let mut cur = ref_path.to_string();
+        let depth = self.stack.len();
+        let out = loop {
+            if self.stack.contains(&cur) {
+                break None; // a cycle on this path, not a shared re-visit
+            }
+            let Some(target) = self.spec.resolve_schema_ref(&cur) else {
+                break None; // dangling pointer
+            };
+            self.stack.push(cur.clone());
+            match &target.ref_path {
+                Some(next) => cur.clone_from(next),
+                None => break Some((target, cur)),
+            }
+        };
+        self.stack.truncate(depth);
+        out
+    }
+
+    /// As [`Self::resolve_named`], discarding the terminal pointer.
+    #[must_use]
+    pub fn resolve(&mut self, ref_path: &str) -> Option<&'a Schema> {
+        self.resolve_named(ref_path).map(|(s, _)| s)
+    }
+
+    /// Run `f` with `name` held on the resolution path, so anything it resolves
+    /// transitively can detect a cycle back to here.
+    pub fn within<T>(&mut self, name: &str, f: impl FnOnce(&mut Self) -> T) -> T {
+        self.stack.push(name.to_string());
+        let out = f(self);
+        self.stack.pop();
+        out
+    }
+
+    /// How deep the current resolution path is.
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        self.stack.len()
+    }
+}
+
+/// True when this schema's only inhabitant is JSON `null`.
+///
+/// Tested against three spellings rather than one. sekkei normalises a scalar
+/// `{"type":"null"}` to `schema_type = Some("null")` with `nullable = true`
+/// (measured, not assumed), but `{"const": null}` and a `type` array naming
+/// only `"null"` are equally legal and cost nothing to accept.
+fn is_null_literal(s: &Schema) -> bool {
+    s.schema_type.as_deref() == Some("null")
+        || s.const_value
+            .as_ref()
+            .is_some_and(serde_json::Value::is_null)
+        || (!s.type_union.is_empty() && s.type_union.iter().all(|t| t == "null"))
+}
+
 impl FieldType {
+    /// This type with any `Nullable` wrapper removed.
+    ///
+    /// Every predicate below answers about the underlying type, because
+    /// nullability is orthogonal to what a thing *is*: `Option<Vec<T>>` is still
+    /// a collection, and `Option<SomeEnum>` is still an enum whose members a
+    /// discriminant search must be able to read.
+    ///
+    /// This exists because `FieldType` is `#[non_exhaustive]` and only `Display`
+    /// is an exhaustive match — every other accessor uses `matches!` or a
+    /// wildcard, so a new variant is accepted silently with a wrong answer
+    /// rather than caught by the compiler. Routing them all through one peel is
+    /// what stops that being nine separate omissions.
+    #[must_use]
+    pub fn non_null(&self) -> &Self {
+        match self {
+            Self::Nullable(inner) => inner.non_null(),
+            other => other,
+        }
+    }
+
+    /// Whether this position admits JSON `null`.
+    #[must_use]
+    pub fn is_nullable(&self) -> bool {
+        matches!(self, Self::Nullable(_) | Self::Null)
+    }
+
     /// Check if this is a primitive type.
     #[must_use]
     pub fn is_primitive(&self) -> bool {
         matches!(
-            self,
+            self.non_null(),
             Self::String | Self::Integer | Self::Number | Self::Boolean
         )
     }
@@ -187,13 +327,13 @@ impl FieldType {
     /// Check if this is a collection type (Array or Map).
     #[must_use]
     pub fn is_collection(&self) -> bool {
-        matches!(self, Self::Array(_) | Self::Map(_))
+        matches!(self.non_null(), Self::Array(_) | Self::Map(_))
     }
 
     /// Get the inner type for Array or Map.
     #[must_use]
     pub fn inner_type(&self) -> Option<&Self> {
-        match self {
+        match self.non_null() {
             Self::Array(inner) | Self::Map(inner) => Some(inner),
             _ => None,
         }
@@ -202,7 +342,7 @@ impl FieldType {
     /// Get enum values if this is an Enum type.
     #[must_use]
     pub fn enum_values(&self) -> Option<&[EnumValue]> {
-        match self {
+        match self.non_null() {
             Self::Enum { values, .. } => Some(values),
             _ => None,
         }
@@ -217,7 +357,7 @@ impl FieldType {
     /// finds nothing across all 85 of its polymorphic unions.
     #[must_use]
     pub fn pinned_value(&self) -> Option<&EnumValue> {
-        match self {
+        match self.non_null() {
             Self::Enum { values, .. } => match values.as_slice() {
                 [only] => Some(only),
                 _ => None,
@@ -229,19 +369,19 @@ impl FieldType {
     /// Returns `true` if this is an Object type.
     #[must_use]
     pub fn is_object(&self) -> bool {
-        matches!(self, Self::Object(_))
+        matches!(self.non_null(), Self::Object(_))
     }
 
     /// Returns `true` if this is an Enum type.
     #[must_use]
     pub fn is_enum(&self) -> bool {
-        matches!(self, Self::Enum { .. })
+        matches!(self.non_null(), Self::Enum { .. })
     }
 
     /// Returns the object name if this is an Object type.
     #[must_use]
     pub fn object_name(&self) -> Option<&str> {
-        match self {
+        match self.non_null() {
             Self::Object(name) => Some(name),
             _ => None,
         }
@@ -250,7 +390,7 @@ impl FieldType {
     /// Returns the nesting depth of the type (0 for scalars, 1+ for containers).
     #[must_use]
     pub fn depth(&self) -> usize {
-        match self {
+        match self.non_null() {
             Self::Array(inner) | Self::Map(inner) => 1 + inner.depth(),
             Self::Enum { underlying, .. } => underlying.depth(),
             _ => 0,
@@ -291,10 +431,90 @@ impl TypeMapper for DefaultTypeMapper {}
 /// Resolve a sekkei `Schema` to a `FieldType`.
 #[must_use]
 pub fn schema_to_field_type(schema: &Schema) -> FieldType {
-    // Handle $ref — always takes precedence.
+    let core = schema_core_type(schema);
+    // A `type` array carrying "null" was normalised by sekkei into
+    // `nullable = true`; put that back into the type, where it composes. The
+    // guard keeps `Nullable(Nullable(_))` and `Nullable(Null)` unconstructible.
+    if schema.nullable && !matches!(core, FieldType::Null | FieldType::Nullable(_)) {
+        return FieldType::Nullable(Box::new(core));
+    }
+    core
+}
+
+/// Map a schema to a field type **with the spec in hand**.
+///
+/// The spec-blind [`schema_to_field_type`] cannot resolve a `$ref`, so it
+/// answers `Object(name)` and stops. That is fine for a name, and not fine for
+/// anything that has to look *through* the reference — chiefly classifying a
+/// union, which requires reading each variant's discriminating property.
+///
+/// Today the only behavioural difference is that a `$ref` chain resolves to its
+/// terminal target rather than its first hop. That is a no-op on Discord's spec
+/// (measured: zero component schemas are a bare `$ref`) and the correct answer
+/// on any spec that does alias, where the single-hop answer is a type whose
+/// properties are empty because they live one hop further on.
+pub fn schema_to_field_type_in(r: &mut RefResolver<'_>, schema: &Schema) -> FieldType {
+    if let Some(ref_path) = &schema.ref_path {
+        // Follow the chain; name the terminal target, not the alias. A dangling
+        // pointer or a cycle keeps the first-hop name, which is still the most
+        // useful thing to call the type.
+        let name = r.resolve_named(ref_path).map_or_else(
+            || sekkei::ref_name(ref_path).to_string(),
+            |(_, pointer)| sekkei::ref_name(&pointer).to_string(),
+        );
+        return FieldType::Object(name);
+    }
+    schema_to_field_type(schema)
+}
+
+/// The type ignoring any nullability the *node itself* declares.
+fn schema_core_type(schema: &Schema) -> FieldType {
+    // Step 1 — `$ref` short-circuits. A `$ref` node has no type of its own to
+    // classify, and nothing in this spec carries a load-bearing sibling.
     if let Some(ref_path) = &schema.ref_path {
         let name = sekkei::ref_name(ref_path);
         return FieldType::Object(name.to_string());
+    }
+
+    // Step 2 — peel `null` BEFORE any union or const test, because this is the
+    // most order-sensitive step in the whole classifier. A two-member
+    // `oneOf:[T, {"type":"null"}]` is `Option<T>`, and it is how this spec
+    // spells nullability 305 times. Tested as a union first it becomes a
+    // one-variant union — the most common wrong answer available. Tested
+    // against the all-const predicate first it escapes that bucket too, since
+    // a null member carries no `const`.
+    if is_null_literal(schema) {
+        return FieldType::Null;
+    }
+    let members = if schema.one_of.is_empty() {
+        &schema.any_of
+    } else {
+        &schema.one_of
+    };
+    if !members.is_empty() {
+        let residue: Vec<&Schema> = members.iter().filter(|m| !is_null_literal(m)).collect();
+        let had_null = residue.len() < members.len();
+        match residue.as_slice() {
+            // Every member was null.
+            [] if had_null => return FieldType::Null,
+            // The nullable-wrapper idiom, and the degenerate one-member union:
+            // recurse on the sole survivor rather than wrapping it in a union
+            // of one.
+            [only] => {
+                let inner = schema_to_field_type(only);
+                return if had_null && !inner.is_nullable() {
+                    FieldType::Nullable(Box::new(inner))
+                } else {
+                    inner
+                };
+            }
+            // Two or more real members: a genuine union. Classifying it needs
+            // the spec (to resolve each variant's $ref and read its
+            // discriminant), which this spec-blind entry point does not have,
+            // so it falls through to the existing behaviour for now rather
+            // than guessing a tag.
+            _ => {}
+        }
     }
 
     let base_type = match schema.schema_type.as_deref() {
@@ -893,6 +1113,207 @@ mod tests {
                 values: vec![EnumValue::Int(1), EnumValue::Int(2)],
                 underlying: Box::new(FieldType::Integer),
             }
+        );
+    }
+
+    // ── nullability ────────────────────────────────────────────────────
+
+    fn json(src: &str) -> Schema {
+        serde_json::from_str(src).unwrap()
+    }
+
+    #[test]
+    fn one_of_with_a_null_member_is_option_not_a_one_variant_union() {
+        // 305 sites in Discord's spec spell nullability this way. Classified as
+        // a union first, each becomes a union of one -- the most common wrong
+        // answer available -- so the peel must precede every union test.
+        // r##"..."## because the JSON pointer contains `"#`, which would
+        // terminate a single-hash raw string.
+        let s = json(r##"{"oneOf":[{"$ref":"#/components/schemas/Pet"},{"type":"null"}]}"##);
+        assert_eq!(
+            schema_to_field_type(&s),
+            FieldType::Nullable(Box::new(FieldType::Object("Pet".into())))
+        );
+    }
+
+    #[test]
+    fn type_array_and_one_of_null_reach_the_same_type() {
+        let a = json(r#"{"type":["string","null"]}"#);
+        let b = json(r#"{"oneOf":[{"type":"string"},{"type":"null"}]}"#);
+        let want = FieldType::Nullable(Box::new(FieldType::String));
+        assert_eq!(schema_to_field_type(&a), want);
+        assert_eq!(schema_to_field_type(&b), want);
+    }
+
+    #[test]
+    fn a_bare_null_schema_is_null_not_any() {
+        assert_eq!(
+            schema_to_field_type(&json(r#"{"type":"null"}"#)),
+            FieldType::Null
+        );
+    }
+
+    #[test]
+    fn const_null_is_indistinguishable_from_absent_a_known_limit() {
+        // `sekkei::Schema.const_value` is `Option<Value>`, and serde maps a JSON
+        // `null` onto `None` — so `{"const": null}` and a schema with no `const`
+        // at all arrive identically, and `is_null_literal` cannot see it.
+        //
+        // Recorded rather than fixed: `const: null` occurs ZERO times in
+        // Discord's spec (measured), so distinguishing it would be speculative
+        // work on a shape nothing produces. Fixing it needs a custom
+        // deserializer on that field in sekkei, and this test is where that
+        // change should announce itself by failing.
+        assert_eq!(
+            schema_to_field_type(&json(r#"{"const":null}"#)),
+            FieldType::Any,
+            "if this now returns Null, sekkei gained a null-distinguishing \
+             deserializer and is_null_literal's const arm became reachable"
+        );
+    }
+
+    #[test]
+    fn nullable_never_nests() {
+        // `type:["string","null"]` sets sekkei's `nullable` AND is a type array;
+        // both paths must not each add a wrapper.
+        let s = json(r#"{"oneOf":[{"type":["string","null"]},{"type":"null"}]}"#);
+        let t = schema_to_field_type(&s);
+        assert_eq!(t, FieldType::Nullable(Box::new(FieldType::String)));
+        assert!(!matches!(t.non_null(), FieldType::Nullable(_)));
+    }
+
+    #[test]
+    fn a_one_member_one_of_recurses_rather_than_wrapping() {
+        let s = json(r#"{"oneOf":[{"type":"integer"}]}"#);
+        assert_eq!(schema_to_field_type(&s), FieldType::Integer);
+    }
+
+    #[test]
+    fn nullability_composes_through_a_container() {
+        // Option<Vec<Option<T>>> -- 8 such sites exist in Discord's spec, and a
+        // field-level `nullable: bool` can encode only one of the two levels.
+        let s = json(r#"{"type":["array","null"],"items":{"type":["string","null"]}}"#);
+        let t = schema_to_field_type(&s);
+        assert!(t.is_nullable(), "outer");
+        assert!(t.inner_type().unwrap().is_nullable(), "items");
+    }
+
+    // ── accessors on the new variants ──────────────────────────────────
+    //
+    // `Display` is the ONLY exhaustive match on FieldType; every accessor below
+    // uses `matches!` or a wildcard, so a new variant is accepted silently with
+    // a wrong answer instead of failing to compile. These assertions are the
+    // forcing function the compiler does not provide.
+
+    #[test]
+    fn nullable_is_transparent_to_every_accessor() {
+        let e = FieldType::Nullable(Box::new(FieldType::Enum {
+            values: vec![EnumValue::Int(2)],
+            underlying: Box::new(FieldType::Integer),
+        }));
+        // The sharpest one: the discriminant search reads `pinned_value`, and
+        // 8 of Discord's buried discriminants are nullable-wrapped. Returning
+        // None here would silently cost those unions their tag.
+        assert_eq!(e.pinned_value(), Some(&EnumValue::Int(2)));
+        assert!(e.is_enum());
+        assert_eq!(e.enum_values().unwrap().len(), 1);
+
+        let arr = FieldType::Nullable(Box::new(FieldType::Array(Box::new(FieldType::String))));
+        assert!(arr.is_collection());
+        assert_eq!(arr.inner_type(), Some(&FieldType::String));
+        assert_eq!(arr.depth(), 1, "nullability is not a nesting level");
+
+        let obj = FieldType::Nullable(Box::new(FieldType::Object("Pet".into())));
+        assert!(obj.is_object());
+        assert_eq!(obj.object_name(), Some("Pet"));
+
+        assert!(FieldType::Nullable(Box::new(FieldType::String)).is_primitive());
+        assert!(FieldType::Nullable(Box::new(FieldType::String)).is_nullable());
+        assert!(FieldType::Null.is_nullable());
+        assert!(!FieldType::Null.is_primitive());
+    }
+
+    // ── $ref resolution ────────────────────────────────────────────────
+
+    fn spec_with(schemas: &str) -> sekkei::OpenApiSpec {
+        let doc = format!(
+            r#"{{"openapi":"3.1.0","info":{{"title":"t","version":"1"}},
+                "paths":{{}},"components":{{"schemas":{schemas}}}}}"#
+        );
+        serde_json::from_str(&doc).unwrap()
+    }
+
+    #[test]
+    fn a_ref_chain_resolves_to_its_terminal_target_not_its_first_hop() {
+        // Single-hop resolution stops at `Alias`, whose properties are empty --
+        // a phantom type, emitted with no error anywhere.
+        let spec = spec_with(
+            r##"{"Alias":{"$ref":"#/components/schemas/Real"},
+                 "Real":{"type":"object","properties":{"a":{"type":"string"}}}}"##,
+        );
+        let mut r = RefResolver::new(&spec);
+        let (target, pointer) = r.resolve_named("#/components/schemas/Alias").unwrap();
+        assert_eq!(sekkei::ref_name(&pointer), "Real");
+        assert!(target.properties.contains_key("a"), "reached the real body");
+
+        let field = json(r##"{"$ref":"#/components/schemas/Alias"}"##);
+        assert_eq!(
+            schema_to_field_type_in(&mut RefResolver::new(&spec), &field),
+            FieldType::Object("Real".into())
+        );
+    }
+
+    #[test]
+    fn a_cycle_is_refused_rather_than_looping() {
+        let spec = spec_with(
+            r##"{"A":{"$ref":"#/components/schemas/B"},
+                 "B":{"$ref":"#/components/schemas/A"}}"##,
+        );
+        let mut r = RefResolver::new(&spec);
+        // `is_none()` rather than `assert_eq!(.., None)`: sekkei::Schema does
+        // not derive PartialEq, so the Option cannot be compared directly.
+        assert!(r.resolve("#/components/schemas/A").is_none());
+        assert_eq!(r.depth(), 0, "the path is unwound even on refusal");
+    }
+
+    #[test]
+    fn a_shared_revisit_is_not_a_cycle() {
+        // THE distinction that makes this a stack and not a seen-set. A schema
+        // graph is a DAG with heavy sharing -- Discord re-enters
+        // ActionRowComponentResponse from five distinct parents -- and a guard
+        // that never forgets would call the second visit a cycle and hand back
+        // the same phantom the resolver exists to prevent.
+        let spec = spec_with(r#"{"Shared":{"type":"object"}}"#);
+        let mut r = RefResolver::new(&spec);
+        assert!(r.resolve("#/components/schemas/Shared").is_some());
+        assert!(
+            r.resolve("#/components/schemas/Shared").is_some(),
+            "a second, sibling visit must still resolve"
+        );
+        // And nested under an unrelated path, it still resolves.
+        r.within("Parent", |r| {
+            assert!(r.resolve("#/components/schemas/Shared").is_some());
+        });
+        assert_eq!(r.depth(), 0);
+    }
+
+    #[test]
+    fn a_dangling_ref_keeps_the_written_name() {
+        let spec = spec_with(r#"{"Real":{"type":"object"}}"#);
+        let field = json(r##"{"$ref":"#/components/schemas/Ghost"}"##);
+        assert_eq!(
+            schema_to_field_type_in(&mut RefResolver::new(&spec), &field),
+            FieldType::Object("Ghost".into()),
+            "the written name is still the most useful thing to call it"
+        );
+    }
+
+    #[test]
+    fn new_variants_render() {
+        assert_eq!(FieldType::Null.to_string(), "Null");
+        assert_eq!(
+            FieldType::Nullable(Box::new(FieldType::String)).to_string(),
+            "Nullable<String>"
         );
     }
 

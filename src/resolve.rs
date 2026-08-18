@@ -1,7 +1,7 @@
 use sekkei::{OpenApiSpec, all_operations};
 use serde::{Deserialize, Serialize};
 
-use crate::field_type::FieldType;
+use crate::field_type::{FieldType, RefResolver, schema_to_field_type_in};
 
 /// A fully resolved operation with typed parameters and response.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,7 +139,10 @@ impl ResolvedSpec {
                     .iter()
                     .map(|(field_name, field_schema)| ResolvedField {
                         name: field_name.clone(),
-                        field_type: FieldType::from(field_schema),
+                        field_type: schema_to_field_type_in(
+                            &mut RefResolver::new(spec),
+                            field_schema,
+                        ),
                         required: schema.required.contains(field_name),
                         description: field_schema.description.clone(),
                     })
@@ -213,7 +216,9 @@ fn resolve_param(spec: &OpenApiSpec, param: &sekkei::Parameter) -> Option<Resolv
     } else {
         param
     };
-    let field_type = p.schema.as_ref().map_or(FieldType::Any, FieldType::from);
+    let field_type = p.schema.as_ref().map_or(FieldType::Any, |s| {
+        schema_to_field_type_in(&mut RefResolver::new(spec), s)
+    });
     Some(ResolvedParam {
         name: p.name.clone(),
         location: p.location.clone(),
@@ -238,7 +243,7 @@ fn resolve_request_body(spec: &OpenApiSpec, op: &sekkei::Operation) -> Option<Re
         .get("application/json")
         .and_then(|mt| mt.schema.as_ref())?;
 
-    let field_type = FieldType::from(schema);
+    let field_type = schema_to_field_type_in(&mut RefResolver::new(spec), schema);
     Some(ResolvedBody {
         required: actual_body.required,
         field_type,
@@ -262,7 +267,7 @@ fn resolve_response_type(spec: &OpenApiSpec, op: &sekkei::Operation) -> Option<F
 
     let content = actual_response.content.as_ref()?;
     let schema = content.get("application/json")?.schema.as_ref()?;
-    Some(FieldType::from(schema))
+    Some(schema_to_field_type_in(&mut RefResolver::new(spec), schema))
 }
 
 #[cfg(test)]
