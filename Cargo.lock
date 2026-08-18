@@ -40,7 +40,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "pleme-io-takumi"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "indexmap",
  "sekkei",
@@ -75,9 +75,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sekkei"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05661981645c3ad0ba42ad1582e60246c37abf38a14f1eec09aecf8e224c4556"
+checksum = "1d104896c98e535036fe8574720f7ad422fa5e9edc3a480924b94f7861332533"
 dependencies = [
  "serde",
  "serde_json",

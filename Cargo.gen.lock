@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "b72760c9135f7cbc039afe116a85dc6e9a1a2de14e79f8c5246541bdf1763d0d",
+  "cargo_lock_sha256": "89739a21e800162905f245b5ccf9ca20e27b60c5d5c313d416cab26d6d24a3bf",
   "manifest_sha256": {
-    "Cargo.toml": "2e2f25240143dbe39d7870062e6aa6dae847e6779af37eb0b38acdb2e96bd026"
+    "Cargo.toml": "5f27505506a9412204fe1d95bd50297b14f05e106932e2eaa0a8e217e47f8301"
   },
   "target_resolves": {
     "base": {
@@ -69,7 +69,7 @@
           "std"
         ]
       },
-      "pleme-io-takumi-0.1.4": {
+      "pleme-io-takumi-0.1.5": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -85,7 +85,7 @@
           },
           {
             "name": "sekkei",
-            "package_key": "sekkei-0.1.2",
+            "package_key": "sekkei-0.1.3",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -162,7 +162,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "sekkei-0.1.2": {
+      "sekkei-0.1.3": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -555,7 +555,7 @@
     "memchr-2.8.3": {
       "edition": "2021"
     },
-    "pleme-io-takumi-0.1.4": {
+    "pleme-io-takumi-0.1.5": {
       "edition": "2024",
       "lib_target": {
         "name": "pleme_io_takumi",
@@ -573,7 +573,7 @@
     "ryu-1.0.23": {
       "edition": "2021"
     },
-    "sekkei-0.1.2": {
+    "sekkei-0.1.3": {
       "edition": "2024"
     },
     "serde-1.0.229": {
