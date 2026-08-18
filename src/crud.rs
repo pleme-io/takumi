@@ -102,7 +102,11 @@ fn extract_base_path(path: &str) -> String {
         .collect::<Vec<_>>()
         .join("/");
 
-    if result.is_empty() { "/".into() } else { result }
+    if result.is_empty() {
+        "/".into()
+    } else {
+        result
+    }
 }
 
 /// Convert a path to a resource name.
@@ -587,6 +591,9 @@ mod tests {
 
     #[test]
     fn path_to_resource_name_deeply_nested() {
-        assert_eq!(path_to_resource_name("/api/v1/org/teams/members"), "members");
+        assert_eq!(
+            path_to_resource_name("/api/v1/org/teams/members"),
+            "members"
+        );
     }
 }

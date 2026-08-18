@@ -1,7 +1,107 @@
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
 use sekkei::Schema;
+use serde::{Deserialize, Serialize};
+
+/// One member of an `enum` — or of a `const`, which is a one-value enum.
+///
+/// JSON allows any value here, but [`FieldType`] derives `Hash + Eq`, so this
+/// cannot simply hold a `serde_json::Value` (`f64` is neither). The scalar arms
+/// cover every enum member and every `const` in practice; `Other` keeps
+/// anything else as its JSON text rather than discarding it, because silently
+/// dropping a value is precisely the defect this type exists to remove.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum EnumValue {
+    Str(std::string::String),
+    Int(i64),
+    Bool(bool),
+    Null,
+    /// A value no other arm can hold — a non-integer number, an array, an
+    /// object — preserved as its JSON text so nothing is lost.
+    Other(std::string::String),
+}
+
+impl EnumValue {
+    /// The string content, when this member is a string.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Str(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// The integer content, when this member is an integer.
+    #[must_use]
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Self::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+}
+
+impl From<&serde_json::Value> for EnumValue {
+    fn from(v: &serde_json::Value) -> Self {
+        match v {
+            serde_json::Value::String(s) => Self::Str(s.clone()),
+            serde_json::Value::Bool(b) => Self::Bool(*b),
+            serde_json::Value::Null => Self::Null,
+            serde_json::Value::Number(n) => n
+                .as_i64()
+                .map_or_else(|| Self::Other(n.to_string()), Self::Int),
+            other => Self::Other(other.to_string()),
+        }
+    }
+}
+
+impl fmt::Display for EnumValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Str(s) => f.write_str(s),
+            Self::Int(i) => write!(f, "{i}"),
+            Self::Bool(b) => write!(f, "{b}"),
+            Self::Null => f.write_str("null"),
+            Self::Other(t) => f.write_str(t),
+        }
+    }
+}
+
+impl From<&str> for EnumValue {
+    fn from(s: &str) -> Self {
+        Self::Str(s.to_string())
+    }
+}
+
+impl From<std::string::String> for EnumValue {
+    fn from(s: std::string::String) -> Self {
+        Self::Str(s)
+    }
+}
+
+impl From<i64> for EnumValue {
+    fn from(i: i64) -> Self {
+        Self::Int(i)
+    }
+}
+
+/// Compare directly against a string, so a caller checking a string-valued
+/// member does not have to construct an `EnumValue` to do it. Mirrors the
+/// `String: PartialEq<&str>` convention. A non-string member is never equal to
+/// a string, which is the honest answer rather than a stringified match.
+impl PartialEq<&str> for EnumValue {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == Some(*other)
+    }
+}
+
+impl PartialEq<EnumValue> for &str {
+    fn eq(&self, other: &EnumValue) -> bool {
+        other.as_str() == Some(*self)
+    }
+}
 
 /// Platform-independent field type for code generation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -15,7 +115,13 @@ pub enum FieldType {
     Map(Box<FieldType>),
     Object(std::string::String),
     Enum {
-        values: Vec<std::string::String>,
+        /// Every declared member, in declaration order.
+        ///
+        /// Typed rather than `Vec<String>`: an enum's members are the values
+        /// that distinguish it, and for a union they are the discriminant
+        /// itself — so narrowing them to strings erased the information a
+        /// generator most needs.
+        values: Vec<EnumValue>,
         underlying: Box<FieldType>,
     },
     Any,
@@ -31,7 +137,11 @@ impl fmt::Display for FieldType {
             Self::Array(inner) => write!(f, "Array<{inner}>"),
             Self::Map(inner) => write!(f, "Map<String, {inner}>"),
             Self::Object(name) => write!(f, "{name}"),
-            Self::Enum { values, .. } => write!(f, "Enum({})", values.join("|")),
+            Self::Enum { values, .. } => {
+                let rendered: Vec<std::string::String> =
+                    values.iter().map(ToString::to_string).collect();
+                write!(f, "Enum({})", rendered.join("|"))
+            }
             Self::Any => f.write_str("Any"),
         }
     }
@@ -91,9 +201,27 @@ impl FieldType {
 
     /// Get enum values if this is an Enum type.
     #[must_use]
-    pub fn enum_values(&self) -> Option<&[std::string::String]> {
+    pub fn enum_values(&self) -> Option<&[EnumValue]> {
         match self {
             Self::Enum { values, .. } => Some(values),
+            _ => None,
+        }
+    }
+
+    /// The single value this type is pinned to, if it is a one-member enum.
+    ///
+    /// A `const`, and an `enum` of length one, are the same thing to a
+    /// generator — and both are how a spec marks which variant of a union a
+    /// schema is. Discord writes the latter (`{"enum":[2],"allOf":[…]}`) and
+    /// never the former, so a discriminator search that looks only for `const`
+    /// finds nothing across all 85 of its polymorphic unions.
+    #[must_use]
+    pub fn pinned_value(&self) -> Option<&EnumValue> {
+        match self {
+            Self::Enum { values, .. } => match values.as_slice() {
+                [only] => Some(only),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -210,16 +338,28 @@ pub fn schema_to_field_type(schema: &Schema) -> FieldType {
     if let Some(values) = &schema.enum_values
         && !values.is_empty()
     {
-        let string_values: Vec<String> = values
-            .iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect();
-        if !string_values.is_empty() {
-            return FieldType::Enum {
-                values: string_values,
-                underlying: Box::new(base_type),
-            };
-        }
+        // Every member is kept. This previously filtered to `v.as_str()`,
+        // which had two effects and both were silent: non-string members were
+        // dropped, and an all-numeric enum produced an EMPTY list that fell
+        // through to `base_type`, so the enum disappeared entirely rather than
+        // arriving partially. Discord declares 165 integer members against 51
+        // string ones, and its unions are discriminated by an integer `enum`
+        // of length one — so the old filter erased the discriminant of every
+        // polymorphic union in the spec before any classifier could read it.
+        return FieldType::Enum {
+            values: values.iter().map(EnumValue::from).collect(),
+            underlying: Box::new(base_type),
+        };
+    }
+
+    // `const` is an enum of one. sekkei keeps them as distinct keywords
+    // because the wire does, but they mean the same thing to a generator, and
+    // a discriminator search has to see both spellings to find anything.
+    if let Some(pinned) = &schema.const_value {
+        return FieldType::Enum {
+            values: vec![EnumValue::from(pinned)],
+            underlying: Box::new(base_type),
+        };
     }
 
     base_type
@@ -323,7 +463,7 @@ mod tests {
         assert_eq!(
             schema_to_field_type(&s),
             FieldType::Enum {
-                values: vec!["a".to_string(), "b".to_string()],
+                values: vec!["a".into(), "b".into()],
                 underlying: Box::new(FieldType::String),
             }
         );
@@ -472,7 +612,7 @@ mod tests {
     #[test]
     fn field_type_display_enum() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string(), "b".to_string()],
+            values: vec!["a".into(), "b".into()],
             underlying: Box::new(FieldType::String),
         };
         assert_eq!(e.to_string(), "Enum(a|b)");
@@ -528,12 +668,12 @@ mod tests {
     #[test]
     fn field_type_enum_values_some() {
         let e = FieldType::Enum {
-            values: vec!["x".to_string(), "y".to_string()],
+            values: vec!["x".into(), "y".into()],
             underlying: Box::new(FieldType::String),
         };
         assert_eq!(
             e.enum_values(),
-            Some(vec!["x".to_string(), "y".to_string()].as_slice())
+            Some(vec![EnumValue::from("x"), EnumValue::from("y")].as_slice())
         );
     }
 
@@ -541,7 +681,10 @@ mod tests {
     fn field_type_enum_values_none() {
         assert_eq!(FieldType::String.enum_values(), None);
         assert_eq!(FieldType::Integer.enum_values(), None);
-        assert_eq!(FieldType::Array(Box::new(FieldType::Any)).enum_values(), None);
+        assert_eq!(
+            FieldType::Array(Box::new(FieldType::Any)).enum_values(),
+            None
+        );
     }
 
     // ── TypeMapper trait ─────────────────────────────────────────
@@ -644,7 +787,7 @@ mod tests {
     #[test]
     fn serde_roundtrip_enum() {
         let ft = FieldType::Enum {
-            values: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            values: vec!["a".into(), "b".into(), "c".into()],
             underlying: Box::new(FieldType::String),
         };
         let json = serde_json::to_string(&ft).unwrap();
@@ -729,7 +872,7 @@ mod tests {
     }
 
     #[test]
-    fn enum_with_non_string_values_filters() {
+    fn integer_enum_is_preserved_not_erased() {
         let s = Schema {
             schema_type: Some("integer".to_string()),
             enum_values: Some(vec![
@@ -738,11 +881,56 @@ mod tests {
             ]),
             ..Default::default()
         };
+        // This assertion is the inverse of the one it replaces. The old test
+        // pinned `FieldType::Integer` -- an all-numeric enum used to filter
+        // down to an empty list and then vanish into its base type, so the
+        // members were gone with no error. Discord declares 165 integer enum
+        // members, and its unions are discriminated by an integer enum of
+        // length one, so that erasure removed every discriminant in the spec.
         assert_eq!(
             schema_to_field_type(&s),
-            FieldType::Integer,
-            "non-string enum values are filtered out, no Enum variant created"
+            FieldType::Enum {
+                values: vec![EnumValue::Int(1), EnumValue::Int(2)],
+                underlying: Box::new(FieldType::Integer),
+            }
         );
+    }
+
+    #[test]
+    fn const_is_an_enum_of_one() {
+        let s = Schema {
+            schema_type: Some("integer".to_string()),
+            const_value: Some(serde_json::json!(2)),
+            ..Default::default()
+        };
+        let t = schema_to_field_type(&s);
+        assert_eq!(t.pinned_value(), Some(&EnumValue::Int(2)));
+    }
+
+    #[test]
+    fn single_member_enum_is_pinned_the_same_as_const() {
+        // Discord writes its discriminants this way -- `{"enum":[2], ...}` --
+        // and never as `const`, so both spellings must reach `pinned_value`
+        // or a discriminator search finds nothing.
+        let s = Schema {
+            schema_type: Some("integer".to_string()),
+            enum_values: Some(vec![serde_json::json!(2)]),
+            ..Default::default()
+        };
+        assert_eq!(
+            schema_to_field_type(&s).pinned_value(),
+            Some(&EnumValue::Int(2))
+        );
+    }
+
+    #[test]
+    fn a_multi_member_enum_is_not_pinned() {
+        let s = Schema {
+            schema_type: Some("integer".to_string()),
+            enum_values: Some(vec![serde_json::json!(1), serde_json::json!(2)]),
+            ..Default::default()
+        };
+        assert_eq!(schema_to_field_type(&s).pinned_value(), None);
     }
 
     #[test]
@@ -804,7 +992,7 @@ mod tests {
     #[test]
     fn field_type_enum_not_primitive() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string()],
+            values: vec!["a".into()],
             underlying: Box::new(FieldType::String),
         };
         assert!(!e.is_primitive());
@@ -813,7 +1001,7 @@ mod tests {
     #[test]
     fn field_type_enum_not_collection() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string()],
+            values: vec!["a".into()],
             underlying: Box::new(FieldType::String),
         };
         assert!(!e.is_collection());
@@ -822,7 +1010,7 @@ mod tests {
     #[test]
     fn field_type_enum_no_inner_type() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string()],
+            values: vec!["a".into()],
             underlying: Box::new(FieldType::String),
         };
         assert!(e.inner_type().is_none());
@@ -831,7 +1019,7 @@ mod tests {
     #[test]
     fn field_type_display_single_enum_value() {
         let e = FieldType::Enum {
-            values: vec!["only".to_string()],
+            values: vec!["only".into()],
             underlying: Box::new(FieldType::String),
         };
         assert_eq!(e.to_string(), "Enum(only)");
@@ -983,7 +1171,7 @@ mod tests {
     #[test]
     fn field_type_is_enum() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string()],
+            values: vec!["a".into()],
             underlying: Box::new(FieldType::String),
         };
         assert!(e.is_enum());
@@ -1023,7 +1211,7 @@ mod tests {
     #[test]
     fn field_type_depth_enum() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string()],
+            values: vec!["a".into()],
             underlying: Box::new(FieldType::String),
         };
         assert_eq!(e.depth(), 0);
@@ -1119,14 +1307,14 @@ mod tests {
         assert_eq!(
             schema_to_field_type(&s),
             FieldType::Enum {
-                values: vec!["1".to_string(), "2".to_string()],
+                values: vec!["1".into(), "2".into()],
                 underlying: Box::new(FieldType::Integer),
             }
         );
     }
 
     #[test]
-    fn enum_with_mixed_values_filters_non_strings() {
+    fn enum_with_mixed_values_keeps_every_member() {
         let s = Schema {
             schema_type: Some("string".to_string()),
             enum_values: Some(vec![
@@ -1141,11 +1329,44 @@ mod tests {
             FieldType::Enum {
                 values, underlying, ..
             } => {
-                assert_eq!(values, vec!["valid", "also_valid"]);
+                // The old test asserted `["valid", "also_valid"]` -- two of the
+                // four members, silently. Order is preserved too, because a
+                // member's position is meaningful in some encodings.
+                assert_eq!(
+                    values,
+                    vec![
+                        EnumValue::Str("valid".to_string()),
+                        EnumValue::Int(42),
+                        EnumValue::Null,
+                        EnumValue::Str("also_valid".to_string()),
+                    ]
+                );
                 assert_eq!(*underlying, FieldType::String);
             }
             other => panic!("expected Enum, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_value_no_scalar_arm_can_hold_is_kept_as_text_not_dropped() {
+        let s = Schema {
+            schema_type: Some("number".to_string()),
+            enum_values: Some(vec![serde_json::json!(1.5), serde_json::json!([1, 2])]),
+            ..Default::default()
+        };
+        // `FieldType` derives Hash + Eq so a float cannot be held natively;
+        // keeping the JSON text is the honest alternative to discarding it,
+        // and it stays visible to a generator as a value it must handle.
+        assert_eq!(
+            schema_to_field_type(&s).enum_values(),
+            Some(
+                [
+                    EnumValue::Other("1.5".to_string()),
+                    EnumValue::Other("[1,2]".to_string()),
+                ]
+                .as_slice()
+            )
+        );
     }
 
     // ── nested type conversions ─────────────────────────────────
@@ -1278,7 +1499,7 @@ mod tests {
     #[test]
     fn field_type_depth_enum_with_underlying_array() {
         let e = FieldType::Enum {
-            values: vec!["a".to_string()],
+            values: vec!["a".into()],
             underlying: Box::new(FieldType::Array(Box::new(FieldType::String))),
         };
         // Enum depth delegates to underlying
@@ -1290,7 +1511,7 @@ mod tests {
     #[test]
     fn serde_roundtrip_enum_with_underlying_integer() {
         let ft = FieldType::Enum {
-            values: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            values: vec!["1".into(), "2".into(), "3".into()],
             underlying: Box::new(FieldType::Integer),
         };
         let json = serde_json::to_string(&ft).unwrap();
@@ -1300,9 +1521,9 @@ mod tests {
 
     #[test]
     fn serde_roundtrip_deeply_nested() {
-        let ft = FieldType::Map(Box::new(FieldType::Array(Box::new(
-            FieldType::Map(Box::new(FieldType::Object("Deep".to_string()))),
-        ))));
+        let ft = FieldType::Map(Box::new(FieldType::Array(Box::new(FieldType::Map(
+            Box::new(FieldType::Object("Deep".to_string())),
+        )))));
         let json = serde_json::to_string(&ft).unwrap();
         let back: FieldType = serde_json::from_str(&json).unwrap();
         assert_eq!(ft, back);

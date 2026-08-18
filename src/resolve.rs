@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use sekkei::{OpenApiSpec, all_operations};
+use serde::{Deserialize, Serialize};
 
 use crate::field_type::FieldType;
 
@@ -69,10 +69,11 @@ impl ResolvedSpec {
     }
 
     /// Find all operations matching a given HTTP method.
-    pub fn operations_by_method<'a>(&'a self, method: &'a str) -> impl Iterator<Item = &'a ResolvedOp> {
-        self.operations
-            .iter()
-            .filter(move |op| op.method == method)
+    pub fn operations_by_method<'a>(
+        &'a self,
+        method: &'a str,
+    ) -> impl Iterator<Item = &'a ResolvedOp> {
+        self.operations.iter().filter(move |op| op.method == method)
     }
 
     /// Find a schema by name.
@@ -105,9 +106,9 @@ impl ResolvedSpec {
 
                 for param in &op.parameters {
                     if let Some(rp) = resolve_param(spec, param) {
-                        let already_present = parameters
-                            .iter()
-                            .any(|existing| existing.name == rp.name && existing.location == rp.location);
+                        let already_present = parameters.iter().any(|existing| {
+                            existing.name == rp.name && existing.location == rp.location
+                        });
                         if !already_present {
                             parameters.push(rp);
                         }
@@ -170,7 +171,10 @@ impl ResolvedOp {
     }
 
     /// Returns parameters filtered by location (e.g. "path", "query", "header").
-    pub fn params_by_location<'a>(&'a self, location: &'a str) -> impl Iterator<Item = &'a ResolvedParam> {
+    pub fn params_by_location<'a>(
+        &'a self,
+        location: &'a str,
+    ) -> impl Iterator<Item = &'a ResolvedParam> {
         self.parameters
             .iter()
             .filter(move |p| p.location == location)
@@ -209,10 +213,7 @@ fn resolve_param(spec: &OpenApiSpec, param: &sekkei::Parameter) -> Option<Resolv
     } else {
         param
     };
-    let field_type = p
-        .schema
-        .as_ref()
-        .map_or(FieldType::Any, FieldType::from);
+    let field_type = p.schema.as_ref().map_or(FieldType::Any, FieldType::from);
     Some(ResolvedParam {
         name: p.name.clone(),
         location: p.location.clone(),
@@ -222,10 +223,7 @@ fn resolve_param(spec: &OpenApiSpec, param: &sekkei::Parameter) -> Option<Resolv
     })
 }
 
-fn resolve_request_body(
-    spec: &OpenApiSpec,
-    op: &sekkei::Operation,
-) -> Option<ResolvedBody> {
+fn resolve_request_body(spec: &OpenApiSpec, op: &sekkei::Operation) -> Option<ResolvedBody> {
     let body = op.request_body.as_ref()?;
 
     // Handle $ref request bodies.
@@ -449,7 +447,7 @@ components:
         assert_eq!(
             status_field.field_type,
             FieldType::Enum {
-                values: vec!["available".to_string(), "sold".to_string()],
+                values: vec!["available".into(), "sold".into()],
                 underlying: Box::new(FieldType::String),
             }
         );
@@ -939,7 +937,11 @@ paths:
         let spec: OpenApiSpec = serde_yaml_ng::from_str(yaml).unwrap();
         let resolved = resolve(&spec);
         assert_eq!(resolved.operations.len(), 3);
-        let methods: Vec<&str> = resolved.operations.iter().map(|o| o.method.as_str()).collect();
+        let methods: Vec<&str> = resolved
+            .operations
+            .iter()
+            .map(|o| o.method.as_str())
+            .collect();
         assert!(methods.contains(&"get"));
         assert!(methods.contains(&"post"));
         assert!(methods.contains(&"put"));
@@ -1310,15 +1312,15 @@ components:
 
         let user_schema = &resolved.schemas["User"];
         assert_eq!(user_schema.fields.len(), 4);
-        let role_field = user_schema.fields.iter().find(|f| f.name == "role").unwrap();
+        let role_field = user_schema
+            .fields
+            .iter()
+            .find(|f| f.name == "role")
+            .unwrap();
         assert_eq!(
             role_field.field_type,
             FieldType::Enum {
-                values: vec![
-                    "admin".to_string(),
-                    "user".to_string(),
-                    "guest".to_string()
-                ],
+                values: vec!["admin".into(), "user".into(), "guest".into()],
                 underlying: Box::new(FieldType::String),
             }
         );
