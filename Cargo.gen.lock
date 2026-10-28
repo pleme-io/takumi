@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "89739a21e800162905f245b5ccf9ca20e27b60c5d5c313d416cab26d6d24a3bf",
+  "cargo_lock_sha256": "b83fc556c841466e4c2e0e97c1b6e1612e4c6e3e413e68abea3b0f5a501fc1cf",
   "manifest_sha256": {
-    "Cargo.toml": "5f27505506a9412204fe1d95bd50297b14f05e106932e2eaa0a8e217e47f8301"
+    "Cargo.toml": "e1e7f51b8fa41176b94adbfc8d0667f067f40badd3cf544c06d70307864787b0"
   },
   "target_resolves": {
     "base": {
@@ -85,7 +85,7 @@
           },
           {
             "name": "sekkei",
-            "package_key": "sekkei-0.1.3",
+            "package_key": "sekkei-0.2.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -162,7 +162,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "sekkei-0.1.3": {
+      "sekkei-0.2.2": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -187,8 +187,8 @@
             "tree": "target"
           },
           {
-            "name": "serde_yaml_ng",
-            "package_key": "serde_yaml_ng-0.10.0",
+            "name": "serde_norway",
+            "package_key": "serde_norway-0.9.42",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -348,7 +348,7 @@
           "std"
         ]
       },
-      "serde_yaml_ng-0.10.0": {
+      "serde_norway-0.9.42": {
         "runtime_dependencies": [
           {
             "name": "indexmap",
@@ -391,8 +391,8 @@
             "tree": "target"
           },
           {
-            "name": "unsafe_libyaml",
-            "package_key": "unsafe-libyaml-0.2.11",
+            "name": "unsafe_libyaml_norway",
+            "package_key": "unsafe-libyaml-norway-0.2.15",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -507,7 +507,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "unsafe-libyaml-0.2.11": {
+      "unsafe-libyaml-norway-0.2.15": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": []
@@ -573,7 +573,7 @@
     "ryu-1.0.23": {
       "edition": "2021"
     },
-    "sekkei-0.1.3": {
+    "sekkei-0.2.2": {
       "edition": "2024"
     },
     "serde-1.0.229": {
@@ -592,7 +592,7 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "serde_yaml_ng-0.10.0": {
+    "serde_norway-0.9.42": {
       "edition": "2021"
     },
     "syn-3.0.3": {
@@ -609,7 +609,7 @@
     "unicode-ident-1.0.24": {
       "edition": "2021"
     },
-    "unsafe-libyaml-0.2.11": {
+    "unsafe-libyaml-norway-0.2.15": {
       "edition": "2021",
       "binaries": [
         {
